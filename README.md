@@ -2,12 +2,14 @@
 
 Interactive underwater OpenGL 3.3 application (C++ / GLSL). View from a bathyscaphe interior toward a dark seabed.
 
-## Commit 1 — implemented methods
+## Implemented methods
 
 | Method | Status |
 |--------|--------|
 | Quaternion camera control | Yes |
 | Underwater skybox / cubemap | Yes |
+| PBR lighting (metallic/roughness) | Yes |
+| Normal mapping (TBN, sand + coral) | Yes |
 
 ## Build
 

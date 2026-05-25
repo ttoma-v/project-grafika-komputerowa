@@ -4,7 +4,9 @@
 
 #include <glm/glm.hpp>
 
+#include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 static float hash2d(int x, int y, int seed) {
     float n = static_cast<float>(x * 374761393 + y * 668265263 + seed * 982451653);
@@ -53,8 +55,7 @@ void TextureCube::createFromFaces(int size, const std::vector<std::vector<unsign
     glGenTextures(1, &id);
     glBindTexture(GL_TEXTURE_CUBE_MAP, id);
     for (int i = 0; i < 6; ++i) {
-        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                     facesRGBA[i].data());
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, facesRGBA[i].data());
     }
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -74,6 +75,117 @@ void TextureCube::destroy() {
 }
 
 namespace ProceduralTextures {
+
+Texture2D makeSandAlbedo(int size) {
+    std::vector<unsigned char> px(size * size * 4);
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            const float n = smoothNoise(x * 0.08f, y * 0.08f, 11);
+            const int i = (y * size + x) * 4;
+            px[i + 0] = static_cast<unsigned char>(200 + n * 40);
+            px[i + 1] = static_cast<unsigned char>(175 + n * 35);
+            px[i + 2] = static_cast<unsigned char>(120 + n * 25);
+            px[i + 3] = 255;
+        }
+    }
+    Texture2D tex;
+    tex.createRGBA(size, size, px);
+    return tex;
+}
+
+Texture2D makeSandNormal(int size) {
+    std::vector<unsigned char> px(size * size * 4);
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            const float hL = smoothNoise((x - 1) * 0.15f, y * 0.15f, 22);
+            const float hR = smoothNoise((x + 1) * 0.15f, y * 0.15f, 22);
+            const float hD = smoothNoise(x * 0.15f, (y - 1) * 0.15f, 22);
+            const float hU = smoothNoise(x * 0.15f, (y + 1) * 0.15f, 22);
+            glm::vec3 n(-(hR - hL), -(hU - hD), 1.0f);
+            n = glm::normalize(n);
+            const int i = (y * size + x) * 4;
+            px[i + 0] = static_cast<unsigned char>((n.x * 0.5f + 0.5f) * 255);
+            px[i + 1] = static_cast<unsigned char>((n.y * 0.5f + 0.5f) * 255);
+            px[i + 2] = static_cast<unsigned char>((n.z * 0.5f + 0.5f) * 255);
+            px[i + 3] = 255;
+        }
+    }
+    Texture2D tex;
+    tex.createRGBA(size, size, px);
+    return tex;
+}
+
+Texture2D makeCoralAlbedo(int size) {
+    std::vector<unsigned char> px(size * size * 4);
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            const float n = smoothNoise(x * 0.12f, y * 0.12f, 33);
+            const int i = (y * size + x) * 4;
+            px[i + 0] = static_cast<unsigned char>(220 + n * 30);
+            px[i + 1] = static_cast<unsigned char>(80 + n * 60);
+            px[i + 2] = static_cast<unsigned char>(90 + n * 40);
+            px[i + 3] = 255;
+        }
+    }
+    Texture2D tex;
+    tex.createRGBA(size, size, px);
+    return tex;
+}
+
+Texture2D makeCoralNormal(int size) {
+    std::vector<unsigned char> px(size * size * 4);
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            const float bumps = smoothNoise(x * 0.25f, y * 0.25f, 44) * 0.6f;
+            glm::vec3 n(bumps, bumps * 0.5f, std::sqrt(1.0f - bumps * bumps));
+            n = glm::normalize(n);
+            const int i = (y * size + x) * 4;
+            px[i + 0] = static_cast<unsigned char>((n.x * 0.5f + 0.5f) * 255);
+            px[i + 1] = static_cast<unsigned char>((n.y * 0.5f + 0.5f) * 255);
+            px[i + 2] = static_cast<unsigned char>((n.z * 0.5f + 0.5f) * 255);
+            px[i + 3] = 255;
+        }
+    }
+    Texture2D tex;
+    tex.createRGBA(size, size, px);
+    return tex;
+}
+
+Texture2D makeRoughness(int size, float base) {
+    std::vector<unsigned char> px(size * size * 4);
+    const unsigned char v = static_cast<unsigned char>(base * 255);
+    for (size_t i = 0; i < px.size(); i += 4) {
+        px[i] = px[i + 1] = px[i + 2] = v;
+        px[i + 3] = 255;
+    }
+    Texture2D tex;
+    tex.createRGBA(size, size, px, false);
+    return tex;
+}
+
+Texture2D makeMetallic(int size, float base) {
+    return makeRoughness(size, base);
+}
+
+Texture2D makeFlowMap(int size) {
+    std::vector<unsigned char> px(size * size * 4);
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            const float angle = smoothNoise(x * 0.04f, y * 0.04f, 55) * 6.28318f;
+            const float strength = 0.35f + 0.25f * smoothNoise(x * 0.07f, y * 0.07f, 66);
+            const float fx = std::cos(angle) * strength;
+            const float fy = std::sin(angle) * strength;
+            const int i = (y * size + x) * 4;
+            px[i + 0] = static_cast<unsigned char>((fx * 0.5f + 0.5f) * 255);
+            px[i + 1] = static_cast<unsigned char>((fy * 0.5f + 0.5f) * 255);
+            px[i + 2] = 128;
+            px[i + 3] = 255;
+        }
+    }
+    Texture2D tex;
+    tex.createRGBA(size, size, px, false);
+    return tex;
+}
 
 TextureCube makeUnderwaterSky(int size) {
     std::vector<std::vector<unsigned char>> faces(6, std::vector<unsigned char>(size * size * 4));
