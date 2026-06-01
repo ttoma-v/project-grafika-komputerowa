@@ -91,6 +91,31 @@ struct DrawObject {
     float roughness = 0.85f;
 };
 
+struct ShadowMap {
+    unsigned int fbo = 0;
+    unsigned int depthMap = 0;
+    const int size = 4096;
+
+    void create() {
+        glGenFramebuffers(1, &fbo);
+        glGenTextures(1, &depthMap);
+        glBindTexture(GL_TEXTURE_2D, depthMap);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, size, size, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    void destroy() {
+        if (depthMap) glDeleteTextures(1, &depthMap);
+        if (fbo) glDeleteFramebuffers(1, &fbo);
+    }
+};
+
 static void drawPBR(const Shader& shader, const Mesh& mesh, const glm::mat4& model, const glm::vec3& tint, float metallic,
                     float roughness, const Texture2D& albedo, const Texture2D& normal, const Texture2D& metal,
                     const Texture2D& rough, const glm::vec3& emissive = glm::vec3(0.0f)) {
@@ -145,13 +170,17 @@ int main() {
     gCamera.pitch = glm::radians(-4.0f);
 
     Shader skyShader;
+    Shader shadowShader;
     Shader pbrShader;
     const std::string skyVert = assetPath("shaders/skybox.vert");
     const std::string skyFrag = assetPath("shaders/skybox.frag");
+    const std::string shadowVert = assetPath("shaders/shadow_depth.vert");
+    const std::string shadowFrag = assetPath("shaders/shadow_depth.frag");
     const std::string pbrVert = assetPath("shaders/pbr.vert");
     const std::string pbrFrag = assetPath("shaders/pbr.frag");
 
-    if (!skyShader.loadFromFiles(skyVert, skyFrag) || !pbrShader.loadFromFiles(pbrVert, pbrFrag)) {
+    if (!shadowShader.loadFromFiles(shadowVert, shadowFrag) || !skyShader.loadFromFiles(skyVert, skyFrag) ||
+        !pbrShader.loadFromFiles(pbrVert, pbrFrag)) {
         std::cerr << "Shader load failed. Run exe from build/Release or ensure assets/ is nearby.\n";
         std::cerr << "Tried: " << pbrVert << '\n';
         return 1;
@@ -201,6 +230,9 @@ int main() {
         rocks.push_back(std::move(r));
     }
 
+    ShadowMap shadow;
+    shadow.create();
+
     float lastFrame = 0.0f;
     while (!glfwWindowShouldClose(window)) {
         const float time = static_cast<float>(glfwGetTime());
@@ -218,11 +250,34 @@ int main() {
 
         constexpr int kNumLights = 1;
         glm::vec3 lightPos[kNumLights];
-        glm::vec3 lightCol[kNumLights] = {glm::vec3(4.0f, 4.2f, 3.6f)};
+        glm::vec3 lightCol[kNumLights] = {glm::vec3(10.0f, 12.0f, 8.0f)};
         float lightRad[kNumLights] = {50.0f};
-        lightPos[0] = glm::vec3(std::sin(time * 0.4f) * 12.0f, 10.0f, -18.0f + std::cos(time * 0.35f) * 8.0f);
+        lightPos[0] = glm::vec3(0.0f, 30.0f, -20.0f);
+        const glm::vec3 lightDir = glm::normalize(lightPos[0] - glm::vec3(0.0f, 0.0f, -25.0f));
+        const float orthoSize = 45.0f;
+        const glm::mat4 lightProjection = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, 1.0f, 70.0f);
+        const glm::mat4 lightView =
+            glm::lookAt(lightPos[0] - lightDir * 5.0f, glm::vec3(0.0f, 0.0f, -25.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        const glm::mat4 lightSpaceMatrix = lightProjection * lightView;
+
+        glViewport(0, 0, shadow.size, shadow.size);
+        glBindFramebuffer(GL_FRAMEBUFFER, shadow.fbo);
+        glClear(GL_DEPTH_BUFFER_BIT);
+        shadowShader.use();
+        shadowShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
+        shadowShader.setBool("useSkin", false);
+
+        auto shadowDraw = [&](const Mesh& mesh, const glm::mat4& model) {
+            shadowShader.setMat4("model", model);
+            mesh.draw();
+        };
+
+        shadowDraw(seabed, floorTransform);
+        for (const auto& c : corals) shadowDraw(c.mesh, c.transform);
+        for (const auto& r : rocks) shadowDraw(r.mesh, r.transform);
 
         glViewport(0, 0, gWidth, gHeight);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClearColor(0.01f, 0.03f, 0.06f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -240,10 +295,12 @@ int main() {
         pbrShader.setMat4("view", view);
         pbrShader.setMat4("projection", proj);
         pbrShader.setVec3("camPos", camPos);
+        pbrShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
         pbrShader.setInt("albedoMap", 0);
         pbrShader.setInt("normalMap", 1);
         pbrShader.setInt("metallicMap", 2);
         pbrShader.setInt("roughnessMap", 3);
+        pbrShader.setInt("shadowMap", 4);
         pbrShader.setInt("numLights", kNumLights);
         pbrShader.setFloat("underwaterFogDensity", 0.018f);
         pbrShader.setBool("useNormalMap", true);
@@ -254,6 +311,8 @@ int main() {
             pbrShader.setVec3(("lightColors[" + idx + "]").c_str(), lightCol[i]);
             pbrShader.setFloat(("lightRadii[" + idx + "]").c_str(), lightRad[i]);
         }
+        glActiveTexture(GL_TEXTURE4);
+        glBindTexture(GL_TEXTURE_2D, shadow.depthMap);
 
         drawPBR(pbrShader, seabed, floorTransform, glm::vec3(1.0f), 0.02f, 0.92f, sandAlbedo, sandNormal, sandMetal,
                 sandRough);
@@ -268,6 +327,7 @@ int main() {
         glfwPollEvents();
     }
 
+    shadow.destroy();
     glfwTerminate();
     return 0;
 }

@@ -10,6 +10,7 @@ Interactive underwater OpenGL 3.3 application (C++ / GLSL). View from a bathysca
 | Underwater skybox / cubemap | Yes |
 | PBR lighting (metallic/roughness) | Yes |
 | Normal mapping (TBN, sand + coral) | Yes |
+| Shadow mapping (depth bias + 3×3 PCF) | Yes — `shadow_depth.*`, `pbr.frag`, `main.cpp` |
 
 ## Build
 

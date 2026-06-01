@@ -9,12 +9,14 @@ uniform sampler2D albedoMap;
 uniform sampler2D normalMap;
 uniform sampler2D metallicMap;
 uniform sampler2D roughnessMap;
+uniform sampler2D shadowMap;
 
 uniform vec3 camPos;
 uniform vec3 lightPositions[4];
 uniform vec3 lightColors[4];
 uniform float lightRadii[4];
 uniform int numLights;
+uniform mat4 lightSpaceMatrix;
 uniform bool useNormalMap;
 uniform float materialMetallic;
 uniform float materialRoughness;
@@ -48,6 +50,25 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+float ShadowCalculation(vec4 fragPosLightSpace) {
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords = projCoords * 0.5 + 0.5;
+    if (projCoords.z > 1.0) return 0.0;
+    float closest = texture(shadowMap, projCoords.xy).r;
+    float current = projCoords.z;
+    float bias = 0.0025;
+    float shadow = current - bias > closest ? 1.0 : 0.0;
+    vec2 texel = 1.0 / vec2(textureSize(shadowMap, 0));
+    float sum = 0.0;
+    for (int x = -1; x <= 1; ++x) {
+        for (int y = -1; y <= 1; ++y) {
+            float pcf = texture(shadowMap, projCoords.xy + vec2(x, y) * texel).r;
+            sum += current - bias > pcf ? 1.0 : 0.0;
+        }
+    }
+    return sum / 9.0;
+}
+
 void main() {
     vec3 albedo = texture(albedoMap, TexCoords).rgb * materialAlbedoTint;
     float metallic = texture(metallicMap, TexCoords).r * materialMetallic;
@@ -63,6 +84,8 @@ void main() {
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
     vec3 Lo = vec3(0.0);
+    vec4 fragPosLightSpace = lightSpaceMatrix * vec4(FragPos, 1.0);
+    float shadow = ShadowCalculation(fragPosLightSpace);
 
     for (int i = 0; i < numLights; ++i) {
         vec3 L = normalize(lightPositions[i] - FragPos);
@@ -82,6 +105,8 @@ void main() {
         float NdotL = max(dot(N, L), 0.0);
         Lo += (kD * albedo / PI + specular) * lightColors[i] * NdotL * attenuation;
     }
+
+    Lo *= (1.0 - shadow * 0.4);
 
     vec3 ambient = albedo * vec3(0.06, 0.10, 0.14);
     vec3 color = ambient + Lo + materialEmissive;
