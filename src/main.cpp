@@ -5,15 +5,18 @@
 #include "Geometry.h"
 #include "GlLoader.h"
 #include "Mesh.h"
+#include "PTF.h"
 #include "Shader.h"
 #include "Texture.h"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -197,11 +200,19 @@ int main() {
     auto coralMetal = ProceduralTextures::makeMetallic(64, 0.12f);
     auto coralRough = ProceduralTextures::makeRoughness(64, 0.55f);
 
+    auto kelpAlbedo = ProceduralTextures::makeKelpAlbedo();
+    auto kelpFlatNormal = ProceduralTextures::makeFlatNormal();
+    auto kelpMetal = ProceduralTextures::makeMetallic(64, 0.02f);
+    auto kelpRough = ProceduralTextures::makeRoughness(64, 0.7f);
+
     auto skyCube = ProceduralTextures::makeUnderwaterSky();
     Mesh skyboxMesh = makeSkyboxCube();
     const float kSeabedSize = 80.0f;
+    const float kSeabedHalf = kSeabedSize * 0.5f;
     Mesh seabed = Geometry::makePlane(kSeabedSize, kSeabedSize, 32);
     const glm::mat4 floorTransform(1.0f);
+
+    Mesh kelpMesh = Geometry::makeKelpSegment();
 
     
     std::vector<DrawObject> corals; // corals arranged in a ring with a forward offset; radius varies per index (patterned spacing)
@@ -230,8 +241,92 @@ int main() {
         rocks.push_back(std::move(r));
     }
 
+    const glm::vec3 kKelpColorDark{0.10f, 0.45f, 0.18f};
+    const glm::vec3 kKelpColorBright{0.32f, 0.90f, 0.42f};
+
+    struct KelpInstance {
+        glm::mat4 transform;
+        glm::vec3 color;
+        float swayPhase;
+        glm::vec3 swayAxis;
+    };
+
+    struct PtfKelpPlant {
+        Mesh mesh;
+        glm::vec3 color;
+        float swayPhase;
+        glm::vec3 swayAxis;
+    };
+
+    std::vector<PtfKelpPlant> ptfKelpPlants;
+    std::vector<KelpInstance> kelps;
+
+    const std::vector<std::vector<glm::vec3>> kelpSplineDefs = {
+        {{-16.0f, 0.0f, -34.0f}, {-10.0f, 2.0f, -31.0f}, {-3.0f, 4.2f, -29.0f}, {4.0f, 5.5f, -31.0f},
+         {11.0f, 4.0f, -34.0f}, {18.0f, 2.2f, -37.0f}, {24.0f, 0.5f, -40.0f}},
+        {{-10.0f, 0.0f, -35.0f}, {-4.0f, 2.2f, -32.0f}, {3.0f, 4.5f, -30.0f}, {10.0f, 5.8f, -32.0f},
+         {17.0f, 4.2f, -35.0f}, {23.0f, 2.4f, -38.0f}, {29.0f, 0.6f, -41.0f}},
+        {{-22.0f, 0.0f, -35.0f}, {-16.0f, 1.8f, -32.0f}, {-9.0f, 3.8f, -30.0f}, {-2.0f, 5.0f, -32.0f},
+         {5.0f, 3.6f, -35.0f}, {12.0f, 1.9f, -38.0f}, {18.0f, 0.4f, -41.0f}},
+    };
+
+    {
+        std::mt19937 rng(4242u);
+        std::uniform_real_distribution<float> u(0.0f, 1.0f);
+        for (const auto& controlPoints : kelpSplineDefs) {
+            ParallelTransportSpline kelpPath;
+            kelpPath.controlPoints = controlPoints;
+            kelpPath.samplesPerSegment = 16;
+            kelpPath.rebuild(glm::vec3(0.0f, 0.0f, 1.0f));
+
+            PtfKelpPlant plant;
+            plant.mesh = Geometry::makeKelpAlongSpline(kelpPath, 0.09f);
+            plant.color = glm::mix(kKelpColorDark, kKelpColorBright, u(rng));
+            plant.swayPhase = u(rng) * glm::two_pi<float>();
+            plant.swayAxis = kelpPath.frameAt(1.0f).binormal;
+            ptfKelpPlants.push_back(std::move(plant));
+        }
+    }
+
+    const int kKelpCount = 48;
+    const unsigned int kKelpSeed = 1337u;
+    const float kKelpEdgeMargin = 2.0f;
+    const glm::vec2 kKelpAreaMin{-kSeabedHalf + kKelpEdgeMargin, -kSeabedHalf + kKelpEdgeMargin};
+    const glm::vec2 kKelpAreaMax{kSeabedHalf - kKelpEdgeMargin, -8.0f};
+    const glm::vec2 kKelpScaleRange{0.9f, 2.6f};
+    const glm::vec2 kKelpClearCenter{0.0f, -20.0f};
+    const float kKelpClearRadius = 6.0f;
+    {
+        std::mt19937 rng(kKelpSeed);
+        std::uniform_real_distribution<float> u(0.0f, 1.0f);
+        for (int i = 0; i < kKelpCount; ++i) {
+            glm::vec2 xz;
+            for (int attempt = 0; attempt < 8; ++attempt) {
+                xz = glm::vec2(glm::mix(kKelpAreaMin.x, kKelpAreaMax.x, u(rng)),
+                               glm::mix(kKelpAreaMin.y, kKelpAreaMax.y, u(rng)));
+                if (glm::length(xz - kKelpClearCenter) >= kKelpClearRadius) break;
+            }
+            const float limit = kSeabedHalf - kKelpEdgeMargin;
+            xz = glm::clamp(xz, glm::vec2(-limit), glm::vec2(limit));
+            const float yaw = u(rng) * glm::two_pi<float>();
+            const float scale = glm::mix(kKelpScaleRange.x, kKelpScaleRange.y, u(rng));
+            const glm::vec3 color = glm::mix(kKelpColorDark, kKelpColorBright, u(rng));
+
+            KelpInstance inst;
+            inst.transform = glm::translate(glm::mat4(1.0f), glm::vec3(xz.x, 0.0f, xz.y)) *
+                             glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                             glm::scale(glm::mat4(1.0f), glm::vec3(scale));
+            inst.color = color;
+            inst.swayPhase = u(rng) * glm::two_pi<float>();
+            inst.swayAxis = glm::vec3(std::cos(yaw), 0.0f, std::sin(yaw));
+            kelps.push_back(inst);
+        }
+    }
+
     ShadowMap shadow;
     shadow.create();
+
+    const glm::mat4 identityTransform(1.0f);
 
     float lastFrame = 0.0f;
     while (!glfwWindowShouldClose(window)) {
@@ -252,7 +347,7 @@ int main() {
         glm::vec3 lightPos[kNumLights];
         glm::vec3 lightCol[kNumLights] = {glm::vec3(10.0f, 12.0f, 8.0f)};
         float lightRad[kNumLights] = {50.0f};
-        lightPos[0] = glm::vec3(0.0f, 30.0f, -20.0f);
+        lightPos[0] = glm::vec3(25.0f, 14.0f, 5.0f);
         const glm::vec3 lightDir = glm::normalize(lightPos[0] - glm::vec3(0.0f, 0.0f, -25.0f));
         const float orthoSize = 45.0f;
         const glm::mat4 lightProjection = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, 1.0f, 70.0f);
@@ -275,6 +370,25 @@ int main() {
         shadowDraw(seabed, floorTransform);
         for (const auto& c : corals) shadowDraw(c.mesh, c.transform);
         for (const auto& r : rocks) shadowDraw(r.mesh, r.transform);
+
+        glDisable(GL_CULL_FACE);
+        shadowShader.setBool("useKelpSway", false);
+        for (const auto& plant : ptfKelpPlants) {
+            shadowShader.setBool("useKelpSway", true);
+            shadowShader.setFloat("kelpTime", time);
+            shadowShader.setFloat("kelpSwayPhase", plant.swayPhase);
+            shadowShader.setVec3("kelpSwayAxis", plant.swayAxis);
+            shadowDraw(plant.mesh, identityTransform);
+        }
+        for (const auto& kelp : kelps) {
+            shadowShader.setBool("useKelpSway", true);
+            shadowShader.setFloat("kelpTime", time);
+            shadowShader.setFloat("kelpSwayPhase", kelp.swayPhase);
+            shadowShader.setVec3("kelpSwayAxis", kelp.swayAxis);
+            shadowDraw(kelpMesh, kelp.transform);
+        }
+        shadowShader.setBool("useKelpSway", false);
+        glEnable(GL_CULL_FACE);
 
         glViewport(0, 0, gWidth, gHeight);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -305,6 +419,7 @@ int main() {
         pbrShader.setFloat("underwaterFogDensity", 0.018f);
         pbrShader.setBool("useNormalMap", true);
         pbrShader.setBool("useSkin", false);
+        pbrShader.setBool("useKelpSway", false);
         for (int i = 0; i < kNumLights; ++i) {
             const std::string idx = std::to_string(i);
             pbrShader.setVec3(("lightPositions[" + idx + "]").c_str(), lightPos[i]);
@@ -322,6 +437,22 @@ int main() {
         for (const auto& r : rocks)
             drawPBR(pbrShader, r.mesh, r.transform, r.albedoTint, r.metallic, r.roughness, sandAlbedo, sandNormal,
                     sandMetal, sandRough);
+
+        auto drawKelp = [&](const Mesh& mesh, const glm::mat4& model, const glm::vec3& color, float swayPhase,
+                            const glm::vec3& swayAxis) {
+            pbrShader.setBool("useKelpSway", true);
+            pbrShader.setFloat("kelpTime", time);
+            pbrShader.setFloat("kelpSwayPhase", swayPhase);
+            pbrShader.setVec3("kelpSwayAxis", swayAxis);
+            drawPBR(pbrShader, mesh, model, color, 0.02f, 0.7f, kelpAlbedo, kelpFlatNormal, kelpMetal, kelpRough);
+            pbrShader.setBool("useKelpSway", false);
+        };
+
+        glDisable(GL_CULL_FACE);
+        for (const auto& plant : ptfKelpPlants)
+            drawKelp(plant.mesh, identityTransform, plant.color, plant.swayPhase, plant.swayAxis);
+        for (const auto& kelp : kelps) drawKelp(kelpMesh, kelp.transform, kelp.color, kelp.swayPhase, kelp.swayAxis);
+        glEnable(GL_CULL_FACE);
 
         glfwSwapBuffers(window);
         glfwPollEvents();

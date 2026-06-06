@@ -209,6 +209,60 @@ Mesh Geometry::makeKelpSegment() {
     return mesh;
 }
 
+Mesh Geometry::makeKelpAlongSpline(const ParallelTransportSpline& spline, float maxWidth) {
+    const std::vector<CurveFrame>& frames = spline.frames;
+    if (frames.size() < 2) return {};
+
+    std::vector<Vertex> verts;
+    std::vector<unsigned int> inds;
+    const int ringCount = static_cast<int>(frames.size());
+    const int stride = ringCount > 64 ? 2 : 1;
+
+    const auto addBladeStrip = [&](const glm::vec3& widthAxisAt, int ringIndex) {
+        const CurveFrame& frame = frames[static_cast<size_t>(ringIndex)];
+        const glm::vec3 widthAxis = glm::normalize(widthAxisAt);
+        const glm::vec3 faceNormal = glm::normalize(glm::cross(frame.tangent, widthAxis));
+        const glm::vec3 bitangent = glm::normalize(glm::cross(faceNormal, widthAxis));
+        const float t = static_cast<float>(ringIndex) / static_cast<float>(ringCount - 1);
+        const float w = maxWidth * (1.0f - t * 0.45f);
+
+        verts.push_back({frame.position - widthAxis * w, faceNormal, widthAxis, bitangent, {0.0f, t}});
+        verts.push_back({frame.position + widthAxis * w, faceNormal, widthAxis, bitangent, {1.0f, t}});
+    };
+
+    for (int strip = 0; strip < 1; ++strip) {
+        const unsigned int base = static_cast<unsigned int>(verts.size());
+        const unsigned int indStart = static_cast<unsigned int>(inds.size());
+
+        std::vector<int> ringIndices;
+        for (int ring = 0; ring < ringCount; ring += stride) ringIndices.push_back(ring);
+        if (ringIndices.back() != ringCount - 1) ringIndices.push_back(ringCount - 1);
+
+        for (int ring : ringIndices) {
+            const CurveFrame& frame = frames[static_cast<size_t>(ring)];
+            const glm::vec3 widthAxis = strip == 0 ? frame.binormal : frame.normal;
+            addBladeStrip(widthAxis, ring);
+        }
+
+        const unsigned int vertCount = static_cast<unsigned int>(verts.size()) - base;
+        for (size_t i = 0; i + 1 < ringIndices.size(); ++i) {
+            const unsigned int a = base + static_cast<unsigned int>(i * 2);
+            inds.push_back(a);
+            inds.push_back(a + 2);
+            inds.push_back(a + 1);
+            inds.push_back(a + 1);
+            inds.push_back(a + 2);
+            inds.push_back(a + 3);
+        }
+        addBackFacesForStrip(verts, inds, base, vertCount, indStart);
+    }
+
+    computeTangents(verts, inds);
+    Mesh mesh;
+    mesh.upload(verts, inds);
+    return mesh;
+}
+
 Mesh Geometry::makeRock(float scale, unsigned int seed) {
     std::mt19937 rng(seed);
     std::uniform_real_distribution<float> dist(-1.0f, 1.0f);

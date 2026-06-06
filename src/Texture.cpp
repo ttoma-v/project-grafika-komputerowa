@@ -151,6 +151,36 @@ Texture2D makeCoralNormal(int size) {
     return tex;
 }
 
+Texture2D makeKelpAlbedo(int size) {
+    std::vector<unsigned char> px(size * size * 4);
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            const float n = smoothNoise(x * 0.18f, y * 0.18f, 91);
+            const int i = (y * size + x) * 4;
+            px[i + 0] = static_cast<unsigned char>(205 + n * 35);
+            px[i + 1] = static_cast<unsigned char>(225 + n * 25);
+            px[i + 2] = static_cast<unsigned char>(185 + n * 40);
+            px[i + 3] = 255;
+        }
+    }
+    Texture2D tex;
+    tex.createRGBA(size, size, px, false);
+    return tex;
+}
+
+Texture2D makeFlatNormal(int size) {
+    std::vector<unsigned char> px(size * size * 4);
+    for (size_t i = 0; i < px.size(); i += 4) {
+        px[i + 0] = 128;
+        px[i + 1] = 128;
+        px[i + 2] = 255;
+        px[i + 3] = 255;
+    }
+    Texture2D tex;
+    tex.createRGBA(size, size, px, false);
+    return tex;
+}
+
 Texture2D makeRoughness(int size, float base) {
     std::vector<unsigned char> px(size * size * 4);
     const unsigned char v = static_cast<unsigned char>(base * 255);

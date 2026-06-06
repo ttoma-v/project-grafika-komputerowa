@@ -27,6 +27,8 @@ Texture2D makeSandAlbedo(int size = 256);
 Texture2D makeSandNormal(int size = 256);
 Texture2D makeCoralAlbedo(int size = 128);
 Texture2D makeCoralNormal(int size = 128);
+Texture2D makeKelpAlbedo(int size = 64);
+Texture2D makeFlatNormal(int size = 4);
 Texture2D makeRoughness(int size = 64, float base = 0.75f);
 Texture2D makeMetallic(int size = 64, float base = 0.05f);
 Texture2D makeFlowMap(int size = 256);

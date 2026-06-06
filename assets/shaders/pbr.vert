@@ -19,7 +19,19 @@ const int MAX_JOINTS = 32;
 uniform bool useSkin;
 uniform mat4 jointMatrices[MAX_JOINTS];
 
+uniform bool useKelpSway;
+uniform float kelpTime;
+uniform float kelpSwayPhase;
+uniform vec3 kelpSwayAxis;
+
 void main() {
+    vec3 pos = aPos;
+    if (useKelpSway) {
+        float height = clamp(aUV.y, 0.0, 1.0);
+        float sway = sin(kelpTime * 1.3 + kelpSwayPhase) * 0.08 * height * height;
+        pos += kelpSwayAxis * sway;
+    }
+
     mat4 world = model;
     if (useSkin) {
         mat4 skin = aWeights.x * jointMatrices[aJoints.x] +
@@ -29,7 +41,7 @@ void main() {
         world = model * skin;
     }
 
-    FragPos = vec3(world * vec4(aPos, 1.0));
+    FragPos = vec3(world * vec4(pos, 1.0));
     TexCoords = aUV;
     mat3 normalMatrix = mat3(transpose(inverse(world)));
     vec3 T = normalize(normalMatrix * aTangent);

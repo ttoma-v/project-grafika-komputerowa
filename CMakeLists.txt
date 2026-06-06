@@ -34,6 +34,7 @@ add_executable(underwater_bathy
     src/Mesh.cpp
     src/Texture.cpp
     src/Geometry.cpp
+    src/PTF.cpp
 )
 
 target_include_directories(underwater_bathy PRIVATE
