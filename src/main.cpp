@@ -1,9 +1,11 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#include "Anglerfish.h"
 #include "Camera.h"
 #include "Geometry.h"
 #include "GlLoader.h"
+#include "ModelLoader.h"
 #include "Mesh.h"
 #include "PTF.h"
 #include "Shader.h"
@@ -28,6 +30,7 @@ static bool gFirstMouse = true;
 static double gLastX = 0.0;
 static double gLastY = 0.0;
 static bool gKeys[1024]{};
+static bool gHeadlightsOn = true;
 
 static std::string assetPath(const std::string& rel) {
     const fs::path fromExe = fs::current_path() / "assets" / rel;
@@ -47,6 +50,7 @@ static void framebufferSizeCallback(GLFWwindow*, int w, int h) {
 
 static void keyCallback(GLFWwindow* window, int key, int, int action, int) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
+    if (key == GLFW_KEY_F && action == GLFW_PRESS) gHeadlightsOn = !gHeadlightsOn;
     if (key >= 0 && key < 1024) {
         if (action == GLFW_PRESS) gKeys[key] = true;
         if (action == GLFW_RELEASE) gKeys[key] = false;
@@ -212,9 +216,39 @@ int main() {
     Mesh seabed = Geometry::makePlane(kSeabedSize, kSeabedSize, 32);
     const glm::mat4 floorTransform(1.0f);
 
+    const glm::vec3 anglerfishCircleCenter{0.0f, 1.6f, -20.0f};
+
+    Anglerfish anglerfish;
+    anglerfish.load(assetPath("Anglerfish.glb"), 2.0f);
+    anglerfish.setupCircularPath(anglerfishCircleCenter, 8.0f, 8);
+
+    Anglerfish piranha;
+    piranha.load(assetPath("Piranha.glb"), 1.0f);
+    piranha.setupCircularPath(glm::vec3(12.0f, 3.0f, -12.0f), 6.0f, 6);
+
+    Anglerfish chest, anchor, barrel, urchin;
+    chest.load(assetPath("Chest.glb"), 1.5f);
+    anchor.load(assetPath("Anchor.glb"), 1.5f);
+    barrel.load(assetPath("Barrel.glb"), 1.2f);
+    urchin.load(assetPath("Urchin.glb"), 0.8f);
+
+    const glm::mat4 chestTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-3.0f, 0.7f, -13.0f)) *
+                                     glm::rotate(glm::mat4(1.0f), glm::radians(15.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::mat4 anchorTransform = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 0.3f, -14.0f)) *
+                                      glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    const glm::mat4 barrelTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-4.5f, 0.6f, -14.5f)) *
+                                      glm::rotate(glm::mat4(1.0f), glm::radians(70.0f), glm::vec3(1.0f, 0.0f, 0.0f)) *
+                                      glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::mat4 urchinTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-1.0f, 0.2f, -11.5f));
+
+    auto uploadJoints = [](const Shader& sh, const std::vector<glm::mat4>& mats) {
+        for (size_t i = 0; i < mats.size(); ++i) {
+            sh.setMat4(("jointMatrices[" + std::to_string(i) + "]").c_str(), mats[i]);
+        }
+    };
+
     Mesh kelpMesh = Geometry::makeKelpSegment();
 
-    
     std::vector<DrawObject> corals; // corals arranged in a ring with a forward offset; radius varies per index (patterned spacing)
     for (int i = 0; i < 44; ++i) {
         const float angle = i * 0.55f;
@@ -339,17 +373,35 @@ int main() {
         gCamera.processKeyboard(gKeys[GLFW_KEY_W], gKeys[GLFW_KEY_S], gKeys[GLFW_KEY_A], gKeys[GLFW_KEY_D],
                                 gKeys[GLFW_KEY_SPACE], gKeys[GLFW_KEY_LEFT_SHIFT], dt);
 
+        const glm::vec3 fwd = gCamera.forward();
+        const glm::vec3 right = gCamera.right();
         const glm::vec3 camPos = gCamera.position;
         const glm::mat4 proj = gCamera.projectionMatrix(static_cast<float>(gWidth) / static_cast<float>(gHeight));
         const glm::mat4 view = gCamera.viewMatrix();
 
-        constexpr int kNumLights = 1;
+        constexpr int kNumLights = 3;
         glm::vec3 lightPos[kNumLights];
-        glm::vec3 lightCol[kNumLights] = {glm::vec3(10.0f, 12.0f, 8.0f)};
-        float lightRad[kNumLights] = {50.0f};
-        lightPos[0] = glm::vec3(25.0f, 14.0f, 5.0f);
+        glm::vec3 lightCol[kNumLights] = {
+            glm::vec3(4.5f, 4.2f, 3.6f),
+            glm::vec3(4.5f, 4.2f, 3.6f),
+            glm::vec3(0.35f, 1.1f, 1.4f),
+        };
+        float lightRad[kNumLights] = {45.0f, 45.0f, 7.0f};
+
+        if (!gHeadlightsOn) {
+            lightCol[0] = glm::vec3(0.0f);
+            lightCol[1] = glm::vec3(0.0f);
+        }
+
+        lightPos[0] = camPos + fwd * 2.5f + right * -0.45f;
+        lightPos[1] = camPos + fwd * 2.5f + right * 0.45f;
+        lightPos[0] += right * std::sin(time * 2.1f) * 0.04f;
+        lightPos[1] += right * std::sin(time * 2.3f + 1.0f) * 0.04f;
+        lightPos[2] = glm::vec3(0.0f, 1.6f, -20.0f);
+        lightCol[2] *= 0.55f + 0.15f * std::sin(time * 3.0f);
+
         const glm::vec3 lightDir = glm::normalize(lightPos[0] - glm::vec3(0.0f, 0.0f, -25.0f));
-        const float orthoSize = 45.0f;
+        const float orthoSize = 30.0f;
         const glm::mat4 lightProjection = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, 1.0f, 70.0f);
         const glm::mat4 lightView =
             glm::lookAt(lightPos[0] - lightDir * 5.0f, glm::vec3(0.0f, 0.0f, -25.0f), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -388,6 +440,40 @@ int main() {
             shadowDraw(kelpMesh, kelp.transform);
         }
         shadowShader.setBool("useKelpSway", false);
+
+        anglerfish.update(time);
+        const glm::mat4 anglerfishTransform = anglerfish.transform();
+        piranha.update(time * 2.0f);
+        const glm::mat4 piranhaTransform = piranha.transform();
+
+        if (anglerfish.valid()) {
+            if (anglerfish.hasLure()) lightPos[2] = anglerfish.lureLightPosition();
+            shadowShader.setMat4("model", anglerfishTransform);
+            shadowShader.setBool("useSkin", true);
+            uploadJoints(shadowShader, anglerfish.joints());
+            for (const auto& sub : anglerfish.submeshes()) sub.mesh.draw();
+            shadowShader.setBool("useSkin", false);
+        }
+
+        if (piranha.valid()) {
+            shadowShader.setMat4("model", piranhaTransform);
+            shadowShader.setBool("useSkin", true);
+            uploadJoints(shadowShader, piranha.joints());
+            for (const auto& sub : piranha.submeshes()) sub.mesh.draw();
+            shadowShader.setBool("useSkin", false);
+        }
+
+        auto drawStaticShadow = [&](const Anglerfish& obj, const glm::mat4& trans) {
+            if (!obj.valid()) return;
+            shadowShader.setMat4("model", trans);
+            shadowShader.setBool("useSkin", false);
+            for (const auto& sub : obj.submeshes()) sub.mesh.draw();
+        };
+        drawStaticShadow(chest, chestTransform);
+        drawStaticShadow(anchor, anchorTransform);
+        drawStaticShadow(barrel, barrelTransform);
+        drawStaticShadow(urchin, urchinTransform);
+
         glEnable(GL_CULL_FACE);
 
         glViewport(0, 0, gWidth, gHeight);
@@ -453,6 +539,46 @@ int main() {
             drawKelp(plant.mesh, identityTransform, plant.color, plant.swayPhase, plant.swayAxis);
         for (const auto& kelp : kelps) drawKelp(kelpMesh, kelp.transform, kelp.color, kelp.swayPhase, kelp.swayAxis);
         glEnable(GL_CULL_FACE);
+
+        pbrShader.setBool("useNormalMap", false);
+        if (anglerfish.valid()) {
+            const ModelLoader::GltfModel& anglerfishModel = anglerfish.model();
+            pbrShader.setBool("useSkin", true);
+            uploadJoints(pbrShader, anglerfish.joints());
+            for (const auto& sub : anglerfish.submeshes()) {
+                drawPBR(pbrShader, sub.mesh, anglerfishTransform, sub.baseColorFactor, sub.metallicFactor,
+                          sub.roughnessFactor, anglerfishModel.whiteAlbedo, anglerfishModel.flatNormal,
+                          anglerfishModel.whiteScalar, anglerfishModel.whiteScalar, sub.emissive);
+            }
+            pbrShader.setBool("useSkin", false);
+        }
+
+        if (piranha.valid()) {
+            const ModelLoader::GltfModel& piranhaModel = piranha.model();
+            pbrShader.setBool("useSkin", true);
+            uploadJoints(pbrShader, piranha.joints());
+            for (const auto& sub : piranha.submeshes()) {
+                drawPBR(pbrShader, sub.mesh, piranhaTransform, sub.baseColorFactor, sub.metallicFactor,
+                          sub.roughnessFactor, piranhaModel.whiteAlbedo, piranhaModel.flatNormal, piranhaModel.whiteScalar,
+                          piranhaModel.whiteScalar, sub.emissive);
+            }
+            pbrShader.setBool("useSkin", false);
+        }
+
+        auto drawStaticPBR = [&](const Anglerfish& obj, const glm::mat4& trans) {
+            if (!obj.valid()) return;
+            const ModelLoader::GltfModel& mod = obj.model();
+            pbrShader.setBool("useSkin", false);
+            for (const auto& sub : obj.submeshes()) {
+                drawPBR(pbrShader, sub.mesh, trans, sub.baseColorFactor, sub.metallicFactor, sub.roughnessFactor,
+                        mod.whiteAlbedo, mod.flatNormal, mod.whiteScalar, mod.whiteScalar, sub.emissive);
+            }
+        };
+        drawStaticPBR(chest, chestTransform);
+        drawStaticPBR(anchor, anchorTransform);
+        drawStaticPBR(barrel, barrelTransform);
+        drawStaticPBR(urchin, urchinTransform);
+        pbrShader.setBool("useNormalMap", true);
 
         glfwSwapBuffers(window);
         glfwPollEvents();

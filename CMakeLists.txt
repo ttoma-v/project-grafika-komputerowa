@@ -26,6 +26,22 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
+FetchContent_Declare(
+    cgltf
+    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
+    GIT_TAG v1.13
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(cgltf)
+
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG master
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(stb)
+
 add_executable(underwater_bathy
     src/main.cpp
     src/Camera.cpp
@@ -35,10 +51,14 @@ add_executable(underwater_bathy
     src/Texture.cpp
     src/Geometry.cpp
     src/PTF.cpp
+    src/ModelLoader.cpp
+    src/Anglerfish.cpp
 )
 
 target_include_directories(underwater_bathy PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${cgltf_SOURCE_DIR}
+    ${stb_SOURCE_DIR}
 )
 
 target_link_libraries(underwater_bathy PRIVATE
