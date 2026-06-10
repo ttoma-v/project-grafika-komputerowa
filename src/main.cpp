@@ -31,6 +31,8 @@ static double gLastX = 0.0;
 static double gLastY = 0.0;
 static bool gKeys[1024]{};
 static bool gHeadlightsOn = true;
+static float gFogDensity = 0.018f;
+static float gDistortionStrength = 0.003f;
 
 static std::string assetPath(const std::string& rel) {
     const fs::path fromExe = fs::current_path() / "assets" / rel;
@@ -51,6 +53,13 @@ static void framebufferSizeCallback(GLFWwindow*, int w, int h) {
 static void keyCallback(GLFWwindow* window, int key, int, int action, int) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
     if (key == GLFW_KEY_F && action == GLFW_PRESS) gHeadlightsOn = !gHeadlightsOn;
+    if (key == GLFW_KEY_LEFT_BRACKET && action == GLFW_PRESS) gFogDensity = glm::max(0.005f, gFogDensity - 0.003f);
+    if (key == GLFW_KEY_RIGHT_BRACKET && action == GLFW_PRESS) gFogDensity = glm::min(0.05f, gFogDensity + 0.003f);
+    if (key == GLFW_KEY_G && action == GLFW_PRESS) {
+        if (gDistortionStrength < 0.001f) gDistortionStrength = 0.003f;
+        else if (gDistortionStrength < 0.004f) gDistortionStrength = 0.006f;
+        else gDistortionStrength = 0.0f;
+    }
     if (key >= 0 && key < 1024) {
         if (action == GLFW_PRESS) gKeys[key] = true;
         if (action == GLFW_RELEASE) gKeys[key] = false;
@@ -89,6 +98,62 @@ static Mesh makeSkyboxCube() {
     m.upload(verts, inds);
     return m;
 }
+
+static Mesh makeScreenQuad() {
+    std::vector<Vertex> verts = {
+        {{-1, -1, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0}},
+        {{1, -1, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {1, 0}},
+        {{1, 1, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {1, 1}},
+        {{-1, 1, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 1}},
+    };
+    std::vector<unsigned int> inds = {0, 1, 2, 0, 2, 3};
+    Mesh m;
+    m.upload(verts, inds);
+    return m;
+}
+
+struct Framebuffer {
+    unsigned int fbo = 0;
+    unsigned int colorTex = 0;
+    unsigned int depthTex = 0;
+    int w = 0;
+    int h = 0;
+
+    void create(int width, int height) {
+        w = width;
+        h = height;
+        glGenFramebuffers(1, &fbo);
+        glGenTextures(1, &colorTex);
+        glBindTexture(GL_TEXTURE_2D, colorTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex, 0);
+
+        glGenTextures(1, &depthTex);
+        glBindTexture(GL_TEXTURE_2D, depthTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, w, h, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTex, 0);
+
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "Framebuffer incomplete\n";
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    void destroy() {
+        if (colorTex) glDeleteTextures(1, &colorTex);
+        if (depthTex) glDeleteTextures(1, &depthTex);
+        if (fbo) glDeleteFramebuffers(1, &fbo);
+        colorTex = depthTex = fbo = 0;
+    }
+};
 
 struct DrawObject {
     Mesh mesh;
@@ -179,15 +244,18 @@ int main() {
     Shader skyShader;
     Shader shadowShader;
     Shader pbrShader;
+    Shader screenShader;
     const std::string skyVert = assetPath("shaders/skybox.vert");
     const std::string skyFrag = assetPath("shaders/skybox.frag");
     const std::string shadowVert = assetPath("shaders/shadow_depth.vert");
     const std::string shadowFrag = assetPath("shaders/shadow_depth.frag");
     const std::string pbrVert = assetPath("shaders/pbr.vert");
     const std::string pbrFrag = assetPath("shaders/pbr.frag");
+    const std::string screenVert = assetPath("shaders/screen.vert");
+    const std::string screenFrag = assetPath("shaders/screen.frag");
 
     if (!shadowShader.loadFromFiles(shadowVert, shadowFrag) || !skyShader.loadFromFiles(skyVert, skyFrag) ||
-        !pbrShader.loadFromFiles(pbrVert, pbrFrag)) {
+        !pbrShader.loadFromFiles(pbrVert, pbrFrag) || !screenShader.loadFromFiles(screenVert, screenFrag)) {
         std::cerr << "Shader load failed. Run exe from build/Release or ensure assets/ is nearby.\n";
         std::cerr << "Tried: " << pbrVert << '\n';
         return 1;
@@ -209,8 +277,10 @@ int main() {
     auto kelpMetal = ProceduralTextures::makeMetallic(64, 0.02f);
     auto kelpRough = ProceduralTextures::makeRoughness(64, 0.7f);
 
+    auto flowMap = ProceduralTextures::makeFlowMap();
     auto skyCube = ProceduralTextures::makeUnderwaterSky();
     Mesh skyboxMesh = makeSkyboxCube();
+    Mesh screenQuad = makeScreenQuad();
     const float kSeabedSize = 80.0f;
     const float kSeabedHalf = kSeabedSize * 0.5f;
     Mesh seabed = Geometry::makePlane(kSeabedSize, kSeabedSize, 32);
@@ -360,6 +430,9 @@ int main() {
     ShadowMap shadow;
     shadow.create();
 
+    Framebuffer sceneFbo;
+    sceneFbo.create(gWidth, gHeight);
+
     const glm::mat4 identityTransform(1.0f);
 
     float lastFrame = 0.0f;
@@ -477,7 +550,7 @@ int main() {
         glEnable(GL_CULL_FACE);
 
         glViewport(0, 0, gWidth, gHeight);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo.fbo);
         glClearColor(0.01f, 0.03f, 0.06f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -502,7 +575,7 @@ int main() {
         pbrShader.setInt("roughnessMap", 3);
         pbrShader.setInt("shadowMap", 4);
         pbrShader.setInt("numLights", kNumLights);
-        pbrShader.setFloat("underwaterFogDensity", 0.018f);
+        pbrShader.setFloat("underwaterFogDensity", gFogDensity);
         pbrShader.setBool("useNormalMap", true);
         pbrShader.setBool("useSkin", false);
         pbrShader.setBool("useKelpSway", false);
@@ -580,10 +653,27 @@ int main() {
         drawStaticPBR(urchin, urchinTransform);
         pbrShader.setBool("useNormalMap", true);
 
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, gWidth, gHeight);
+        glClearColor(0.01f, 0.03f, 0.06f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glDisable(GL_DEPTH_TEST);
+        screenShader.use();
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, sceneFbo.colorTex);
+        flowMap.bind(1);
+        screenShader.setInt("sceneColor", 0);
+        screenShader.setInt("flowMap", 1);
+        screenShader.setFloat("time", time);
+        screenShader.setFloat("distortionStrength", gDistortionStrength);
+        screenQuad.draw();
+        glEnable(GL_DEPTH_TEST);
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
+    sceneFbo.destroy();
     shadow.destroy();
     glfwTerminate();
     return 0;
