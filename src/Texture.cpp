@@ -4,9 +4,13 @@
 
 #include <glm/glm.hpp>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <iostream>
 
 static float hash2d(int x, int y, int seed) {
     float n = static_cast<float>(x * 374761393 + y * 668265263 + seed * 982451653);
@@ -26,6 +30,26 @@ static float smoothNoise(float x, float y, int seed) {
     const float ux = tx * tx * (3.0f - 2.0f * tx);
     const float uy = ty * ty * (3.0f - 2.0f * ty);
     return glm::mix(glm::mix(a, b, ux), glm::mix(c, d, ux), uy);
+}
+
+Texture2D Texture2D::loadFromFile(const std::string& path, bool mipmaps) {
+    int w = 0;
+    int h = 0;
+    int channels = 0;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* data = stbi_load(path.c_str(), &w, &h, &channels, 4);
+    if (!data) {
+        std::cerr << "Failed to load texture: " << path << " (" << stbi_failure_reason() << ")\n";
+        return {};
+    }
+
+    std::vector<unsigned char> pixels(static_cast<size_t>(w) * static_cast<size_t>(h) * 4);
+    std::copy(data, data + pixels.size(), pixels.begin());
+    stbi_image_free(data);
+
+    Texture2D tex;
+    tex.createRGBA(w, h, pixels, mipmaps);
+    return tex;
 }
 
 void Texture2D::createRGBA(int w, int h, const std::vector<unsigned char>& pixels, bool mipmaps) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <vector>
 
 class Texture2D {
@@ -9,6 +10,7 @@ public:
     int height = 0;
 
     void createRGBA(int w, int h, const std::vector<unsigned char>& pixels, bool mipmaps = true);
+    static Texture2D loadFromFile(const std::string& path, bool mipmaps = true);
     void bind(unsigned int unit) const;
     void destroy();
 };

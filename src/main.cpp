@@ -190,7 +190,8 @@ struct ShadowMap {
 
 static void drawPBR(const Shader& shader, const Mesh& mesh, const glm::mat4& model, const glm::vec3& tint, float metallic,
                     float roughness, const Texture2D& albedo, const Texture2D& normal, const Texture2D& metal,
-                    const Texture2D& rough, const glm::vec3& emissive = glm::vec3(0.0f)) {
+                    const Texture2D& rough, const glm::vec3& emissive = glm::vec3(0.0f),
+                    const Texture2D* flow = nullptr) {
     shader.setMat4("model", model);
     shader.setVec3("materialAlbedoTint", tint);
     shader.setFloat("materialMetallic", metallic);
@@ -200,6 +201,7 @@ static void drawPBR(const Shader& shader, const Mesh& mesh, const glm::mat4& mod
     normal.bind(1);
     metal.bind(2);
     rough.bind(3);
+    if (flow && flow->id) flow->bind(5);
     mesh.draw();
 }
 
@@ -262,10 +264,14 @@ int main() {
     }
     std::cout << "Shaders OK. Assets from: " << fs::current_path() << '\n';
 
-    auto sandAlbedo = ProceduralTextures::makeSandAlbedo();
-    auto sandNormal = ProceduralTextures::makeSandNormal();
+    auto sandAlbedo = Texture2D::loadFromFile(assetPath("textures/sand_color.jpg"));
+    auto sandNormal = Texture2D::loadFromFile(assetPath("textures/sand_normal.jpg"));
+    auto sandRough = Texture2D::loadFromFile(assetPath("textures/sand_roughness.jpg"));
     auto sandMetal = ProceduralTextures::makeMetallic(64, 0.02f);
-    auto sandRough = ProceduralTextures::makeRoughness(64, 0.92f);
+    if (!sandAlbedo.id || !sandNormal.id || !sandRough.id) {
+        std::cerr << "Sand texture load failed. Ensure assets/textures/ contains sand_*.jpg\n";
+        return 1;
+    }
 
     auto coralAlbedo = ProceduralTextures::makeCoralAlbedo();
     auto coralNormal = ProceduralTextures::makeCoralNormal();
@@ -281,9 +287,9 @@ int main() {
     auto skyCube = ProceduralTextures::makeUnderwaterSky();
     Mesh skyboxMesh = makeSkyboxCube();
     Mesh screenQuad = makeScreenQuad();
-    const float kSeabedSize = 80.0f;
+    const float kSeabedSize = 400.0f;
     const float kSeabedHalf = kSeabedSize * 0.5f;
-    Mesh seabed = Geometry::makePlane(kSeabedSize, kSeabedSize, 32);
+    Mesh seabed = Geometry::makeSeabed(kSeabedSize, kSeabedSize, 32);
     const glm::mat4 floorTransform(1.0f);
 
     const glm::vec3 anglerfishCircleCenter{0.0f, 1.6f, -20.0f};
@@ -551,7 +557,7 @@ int main() {
 
         glViewport(0, 0, gWidth, gHeight);
         glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo.fbo);
-        glClearColor(0.01f, 0.03f, 0.06f, 1.0f);
+        glClearColor(0.06f, 0.21f, 0.23f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glDepthFunc(GL_LEQUAL);
@@ -574,6 +580,7 @@ int main() {
         pbrShader.setInt("metallicMap", 2);
         pbrShader.setInt("roughnessMap", 3);
         pbrShader.setInt("shadowMap", 4);
+        pbrShader.setInt("flowMap", 5);
         pbrShader.setInt("numLights", kNumLights);
         pbrShader.setFloat("underwaterFogDensity", gFogDensity);
         pbrShader.setBool("useNormalMap", true);
@@ -655,7 +662,7 @@ int main() {
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, gWidth, gHeight);
-        glClearColor(0.01f, 0.03f, 0.06f, 1.0f);
+        glClearColor(0.06f, 0.21f, 0.23f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         glDisable(GL_DEPTH_TEST);
         screenShader.use();

@@ -7,6 +7,7 @@
 
 namespace Geometry {
 Mesh makePlane(float width, float depth, int subdivisions);
+Mesh makeSeabed(float width, float depth, int subdivisions);
 Mesh makeLowPolyCoral(float scale, unsigned int seed);
 Mesh makeKelpSegment();
 Mesh makeKelpAlongSpline(const ParallelTransportSpline& spline, float maxWidth = 0.08f);

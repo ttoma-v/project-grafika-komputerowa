@@ -126,6 +126,63 @@ Mesh Geometry::makePlane(float width, float depth, int subdivisions) {
 
 namespace {
 
+float seabedHeight(float x, float z) {
+    return std::sin(x * 0.2f) * 0.4f + std::cos(z * 0.15f) * 0.32f;
+}
+
+glm::vec3 seabedNormal(float x, float z) {
+    const float dydx = std::cos(x * 0.2f) * 0.2f * 0.4f;
+    const float dydz = -std::sin(z * 0.15f) * 0.15f * 0.32f;
+    return glm::normalize(glm::vec3(-dydx, 1.0f, -dydz));
+}
+
+}
+
+Mesh Geometry::makeSeabed(float width, float depth, int subdivisions) {
+    std::vector<Vertex> verts;
+    std::vector<unsigned int> inds;
+    const int n = subdivisions + 1;
+    for (int z = 0; z < n; ++z) {
+        for (int x = 0; x < n; ++x) {
+            const float fx = static_cast<float>(x) / subdivisions;
+            const float fz = static_cast<float>(z) / subdivisions;
+            const float px = (fx - 0.5f) * width;
+            const float pz = (fz - 0.5f) * depth;
+            const float py = seabedHeight(px, pz);
+            const glm::vec3 normal = seabedNormal(px, pz);
+
+            Vertex v;
+            v.position = glm::vec3(px, py, pz);
+            v.normal = normal;
+            v.uv = glm::vec2(fx * 12.0f, fz * 12.0f);
+            const glm::vec3 tangent = glm::normalize(glm::vec3(1.0f, std::cos(px * 0.2f) * 0.08f, 0.0f));
+            v.tangent = tangent;
+            v.bitangent = glm::normalize(glm::cross(normal, tangent));
+            verts.push_back(v);
+        }
+    }
+    for (int z = 0; z < subdivisions; ++z) {
+        for (int x = 0; x < subdivisions; ++x) {
+            const unsigned int i0 = z * n + x;
+            const unsigned int i1 = i0 + 1;
+            const unsigned int i2 = i0 + n;
+            const unsigned int i3 = i2 + 1;
+            inds.push_back(i0);
+            inds.push_back(i2);
+            inds.push_back(i1);
+            inds.push_back(i1);
+            inds.push_back(i2);
+            inds.push_back(i3);
+        }
+    }
+    computeTangents(verts, inds);
+    Mesh mesh;
+    mesh.upload(verts, inds);
+    return mesh;
+}
+
+namespace {
+
 struct CoralBuilder {
     std::mt19937 rng;
     std::uniform_real_distribution<float> dist;
