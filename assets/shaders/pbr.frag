@@ -9,15 +9,20 @@ uniform sampler2D albedoMap;
 uniform sampler2D normalMap;
 uniform sampler2D metallicMap;
 uniform sampler2D roughnessMap;
-uniform sampler2D shadowMap;
+uniform sampler2D shadowMapFish;
+uniform sampler2D shadowMapCam;
 uniform sampler2D flowMap;
 
 uniform vec3 camPos;
 uniform vec3 lightPositions[4];
+uniform vec3 lightDirections[4];
 uniform vec3 lightColors[4];
 uniform float lightRadii[4];
 uniform int numLights;
-uniform mat4 lightSpaceMatrix;
+uniform float headlightCosCutoff;
+uniform float headlightSoftCosCutoff;
+uniform mat4 fishLightSpaceMatrix;
+uniform mat4 camLightSpaceMatrix;
 uniform bool useNormalMap;
 uniform float materialMetallic;
 uniform float materialRoughness;
@@ -26,6 +31,7 @@ uniform vec3 materialEmissive;
 uniform float underwaterFogDensity;
 uniform float time;
 uniform bool useSandFlow;
+uniform bool shadowsEnabled;
 
 const float PI = 3.14159265359;
 
@@ -53,19 +59,18 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-float ShadowCalculation(vec4 fragPosLightSpace) {
+float ShadowCalculation(sampler2D mapTex, vec4 fragPosLightSpace) {
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
-    if (projCoords.z > 1.0) return 0.0;
-    float closest = texture(shadowMap, projCoords.xy).r;
+    if (projCoords.z > 1.0 || projCoords.z < 0.0) return 0.0;
+    if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
     float current = projCoords.z;
     float bias = 0.0025;
-    float shadow = current - bias > closest ? 1.0 : 0.0;
-    vec2 texel = 1.0 / vec2(textureSize(shadowMap, 0));
+    vec2 texel = 1.0 / vec2(textureSize(mapTex, 0));
     float sum = 0.0;
     for (int x = -1; x <= 1; ++x) {
         for (int y = -1; y <= 1; ++y) {
-            float pcf = texture(shadowMap, projCoords.xy + vec2(x, y) * texel).r;
+            float pcf = texture(mapTex, projCoords.xy + vec2(x, y) * texel).r;
             sum += current - bias > pcf ? 1.0 : 0.0;
         }
     }
@@ -110,15 +115,22 @@ void main() {
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
     vec3 Lo = vec3(0.0);
-    vec4 fragPosLightSpace = lightSpaceMatrix * vec4(FragPos, 1.0);
-    float shadow = ShadowCalculation(fragPosLightSpace);
+    float fishShadow = ShadowCalculation(shadowMapFish, fishLightSpaceMatrix * vec4(FragPos, 1.0));
+    float camShadow = ShadowCalculation(shadowMapCam, camLightSpaceMatrix * vec4(FragPos, 1.0));
 
     for (int i = 0; i < numLights; ++i) {
-        vec3 L = normalize(lightPositions[i] - FragPos);
+        vec3 toLight = lightPositions[i] - FragPos;
+        vec3 L = normalize(toLight);
         vec3 H = normalize(V + L);
-        float dist = length(lightPositions[i] - FragPos);
+        float dist = length(toLight);
         float attenuation = 1.0 / (1.0 + 0.045 * dist + 0.008 * dist * dist);
         attenuation *= 1.0 - smoothstep(lightRadii[i] * 0.65, lightRadii[i], dist);
+        if (i < 2) {
+            vec3 spotDir = normalize(lightDirections[i]);
+            float theta = dot(normalize(FragPos - lightPositions[i]), spotDir);
+            float spot = smoothstep(headlightSoftCosCutoff, headlightCosCutoff, theta);
+            attenuation *= spot;
+        }
 
         float NDF = DistributionGGX(N, H, roughness);
         float G = GeometrySmith(N, V, L, roughness);
@@ -129,10 +141,15 @@ void main() {
         vec3 kS = F;
         vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
         float NdotL = max(dot(N, L), 0.0);
-        Lo += (kD * albedo / PI + specular) * lightColors[i] * NdotL * attenuation;
+        float shadowFactor = 1.0;
+        if (shadowsEnabled) {
+            const float fishShadowStrength = 0.78;
+            const float cameraShadowStrength = 0.58;
+            if (i == 2) shadowFactor *= (1.0 - fishShadow * fishShadowStrength);
+            if (i < 2) shadowFactor *= (1.0 - camShadow * cameraShadowStrength);
+        }
+        Lo += (kD * albedo / PI + specular) * lightColors[i] * NdotL * attenuation * shadowFactor;
     }
-
-    Lo *= (1.0 - shadow * 0.4);
 
     vec3 ambient = albedo * vec3(0.06, 0.10, 0.14);
     vec3 color = ambient + Lo + materialEmissive;

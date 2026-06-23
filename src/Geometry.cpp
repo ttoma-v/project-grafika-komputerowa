@@ -127,12 +127,24 @@ Mesh Geometry::makePlane(float width, float depth, int subdivisions) {
 namespace {
 
 float seabedHeight(float x, float z) {
-    return std::sin(x * 0.2f) * 0.4f + std::cos(z * 0.15f) * 0.32f;
+    const float base = std::sin(x * 0.2f) * 0.4f + std::cos(z * 0.15f) * 0.32f;
+    const float duneWaves = std::sin(x * 0.55f + z * 0.21f) * 0.9f + std::cos(x * 0.33f - z * 0.47f) * 0.7f;
+    const float ridge = std::sin(z * 0.6f) * std::cos(x * 0.18f) * 0.45f;
+    const float cross = std::sin((x + z) * 0.28f) * 0.35f;
+
+    const float pitA = std::exp(-(((x + 12.0f) * (x + 12.0f)) / 90.0f + ((z - 16.0f) * (z - 16.0f)) / 70.0f));
+    const float pitB = std::exp(-(((x - 9.0f) * (x - 9.0f)) / 65.0f + ((z - 23.0f) * (z - 23.0f)) / 80.0f));
+    const float pitC = std::exp(-(((x - 14.0f) * (x - 14.0f)) / 85.0f + ((z + 14.0f) * (z + 14.0f)) / 75.0f));
+    const float pitD = std::exp(-(((x + 16.0f) * (x + 16.0f)) / 95.0f + ((z + 22.0f) * (z + 22.0f)) / 90.0f));
+    const float pits = -0.85f * pitA - 0.65f * pitB - 0.75f * pitC - 0.6f * pitD;
+
+    return base + duneWaves * 0.38f + ridge * 0.3f + cross + pits;
 }
 
 glm::vec3 seabedNormal(float x, float z) {
-    const float dydx = std::cos(x * 0.2f) * 0.2f * 0.4f;
-    const float dydz = -std::sin(z * 0.15f) * 0.15f * 0.32f;
+    const float eps = 0.25f;
+    const float dydx = (seabedHeight(x + eps, z) - seabedHeight(x - eps, z)) / (2.0f * eps);
+    const float dydz = (seabedHeight(x, z + eps) - seabedHeight(x, z - eps)) / (2.0f * eps);
     return glm::normalize(glm::vec3(-dydx, 1.0f, -dydz));
 }
 
