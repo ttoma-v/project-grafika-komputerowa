@@ -2,7 +2,7 @@
 
 Interactive underwater OpenGL 3.3 application (C++ / GLSL). View from a bathyscaphe interior toward a dark seabed with sand, corals, kelp, animated fish, GLB props, submarine headlights, and flow-map underwater distortion.
 
-**Team members:** _[add names before submission]_
+**Team members:** Romanov, Dutka, Eivazava gr. 13
 
 ## Implemented methods
 
