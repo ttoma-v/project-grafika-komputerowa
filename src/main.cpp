@@ -702,10 +702,8 @@ Shader particlesShader;
         lightPos[1] = camPos + fwd * 1.7f + up * -0.12f + right * 0.42f;
         lightPos[0] += right * std::sin(time * 2.1f) * 0.04f;
         lightPos[1] += right * std::sin(time * 2.3f + 1.0f) * 0.04f;
-        lightPos[2] = glm::vec3(0.0f, 1.6f, -20.0f);
-        if (anglerfish.valid() && anglerfish.hasLure()) {
-            lightPos[2] = anglerfish.lureLightPosition();
-        }
+        lightPos[2] = glm::vec3(anglerfishTransform[3]); 
+        lightPos[2].y += 0.45f;
         lightDirWs[0] = fwd;
         lightDirWs[1] = fwd;
         lightDirWs[2] = glm::vec3(0.0f, -1.0f, 0.0f);
