@@ -32,6 +32,7 @@ uniform float underwaterFogDensity;
 uniform float time;
 uniform bool useSandFlow;
 uniform bool shadowsEnabled;
+uniform bool u_enableTopMoss;
 
 const float PI = 3.14159265359;
 
@@ -109,6 +110,14 @@ void main() {
             tangentNormal = texture(normalMap, TexCoords).rgb * 2.0 - 1.0;
         }
         N = normalize(TBN * tangentNormal);
+    }
+
+    if (u_enableTopMoss) {
+        float mossFactor = clamp(dot(normalize(N), vec3(0.0, 1.0, 0.0)) * 2.5 - 0.5, 0.0, 1.0);
+        vec3 mossColor = vec3(0.06, 0.22, 0.09);
+        albedo = mix(albedo, mossColor, mossFactor * 0.9);
+        roughness = mix(roughness, 0.95, mossFactor);
+        metallic = mix(metallic, 0.0, mossFactor);
     }
 
     vec3 V = normalize(camPos - FragPos);

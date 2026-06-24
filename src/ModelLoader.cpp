@@ -9,6 +9,7 @@
 #include "cgltf.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -278,6 +279,32 @@ glm::mat4 bindGlobal(const ModelLoader::GltfModel& m, int node) {
     return result;
 }
 
+std::string toLowerAscii(std::string value) {
+    for (char& c : value) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return value;
+}
+
+bool isChestGoldAsset(const std::string& path) {
+    const std::string lower = toLowerAscii(std::filesystem::path(path).filename().string());
+    return lower.find("chest_gold") != std::string::npos;
+}
+
+bool isFxGlowSubmeshName(const std::string& name) {
+    if (name.empty()) return false;
+    const std::string lower = toLowerAscii(name);
+    static constexpr const char* kKeywords[] = {"glow", "fx", "beam", "ray", "plane", "flare", "light_flare"};
+    for (const char* keyword : kKeywords) {
+        if (lower.find(keyword) != std::string::npos) return true;
+    }
+    return false;
+}
+
+std::string resolveSubmeshName(const cgltf_node& node, const cgltf_mesh& mesh, const std::string& materialName) {
+    if (mesh.name && mesh.name[0]) return mesh.name;
+    if (node.name && node.name[0]) return node.name;
+    return materialName;
+}
+
 }
 
 namespace ModelLoader {
@@ -348,6 +375,7 @@ bool loadGlb(const std::string& path, GltfModel& out, float targetSize) {
             appendPrimitive(mesh.primitives[p], world, raw.vertices, raw.indices);
             if (raw.vertices.empty() || raw.indices.empty()) continue;
             readMaterial(mesh.primitives[p], raw.material, modelDir, imageCache);
+            raw.material.name = resolveSubmeshName(node, mesh, raw.material.name);
             raws.push_back(std::move(raw));
         }
     }
@@ -390,7 +418,20 @@ bool loadGlb(const std::string& path, GltfModel& out, float targetSize) {
     out.submeshes.clear();
     out.submeshes.reserve(raws.size());
     size_t totalTris = 0;
+    const bool filterFxGlow = isChestGoldAsset(path);
+    size_t subMeshIndex = 0;
     for (auto& raw : raws) {
+        const std::string& subName = raw.material.name.empty() ? std::string("(unnamed)") : raw.material.name;
+        std::cout << "[Model Loader] Loaded sub-mesh [" << subMeshIndex << "]: \"" << subName
+                  << "\" (vertices: " << raw.vertices.size() << ")\n";
+
+        if (filterFxGlow && isFxGlowSubmeshName(subName)) {
+            std::cout << "[Model Loader] Skipping FX sub-mesh [" << subMeshIndex << "]: \"" << subName << "\"\n";
+            ++subMeshIndex;
+            continue;
+        }
+        ++subMeshIndex;
+
         glm::vec3 centroid(0.0f);
         for (const auto& v : raw.vertices) centroid += glm::vec3(normalize * glm::vec4(bindPos(v), 1.0f));
         centroid /= static_cast<float>(raw.vertices.size());

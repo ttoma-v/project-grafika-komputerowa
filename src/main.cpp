@@ -35,6 +35,70 @@ static bool gShadowsEnabled = true;
 static float gFogDensity = 0.012f;
 static float gDistortionStrength = 0.003f;
 
+// --- Primary anchor: anchor_green.glb (foreground seabed) ---
+namespace AnchorGreenCfg {
+constexpr float kTargetSize = 1.5f;
+constexpr float kPosX = 2.0f;
+constexpr float kPosZ = -14.0f;
+constexpr float kSeabedYOffset = 0.28f;
+constexpr float kRotXDeg = 95.0f;
+constexpr float kRotYDeg = 35.0f;
+constexpr float kRotZDeg = 12.0f;
+constexpr float kScaleX = 5.0f;
+constexpr float kScaleY = 5.0f;
+constexpr float kScaleZ = 5.0f;
+}  // namespace AnchorGreenCfg
+
+// --- Secondary anchor: anchor_brown.glb (foreground debug placement, left of camera view) ---
+namespace AnchorBrownCfg {
+constexpr float kTargetSize = 1.45f;
+constexpr float kPosX = -1.5f;
+constexpr float kPosZ = -5.0f;
+constexpr float kSeabedYOffset = 1.66f;
+constexpr float kRotXDeg = 95.0f;
+constexpr float kRotYDeg = -25.0f;
+constexpr float kRotZDeg = 8.0f;
+constexpr float kScaleX = 10.0f;
+constexpr float kScaleY = 10.0f;
+constexpr float kScaleZ = 10.0f;
+}  // namespace AnchorBrownCfg
+
+// --- Treasure cluster: chest_gold.glb (hero, open gold chest) ---
+namespace HeroChestCfg {
+constexpr float kTargetSize = 1.65f;
+constexpr float HERO_CHEST_POS_X = 6.2f;
+constexpr float HERO_CHEST_POS_Z = -9.5f;
+constexpr float HERO_CHEST_SEABED_Y_OFFSET = 1.40f;
+constexpr float HERO_CHEST_ROT_X = 6.0f;
+constexpr float HERO_CHEST_ROT_Y = -38.0f;
+constexpr float HERO_CHEST_ROT_Z = 3.0f;
+constexpr float HERO_CHEST_SCALE = 2.0f;
+}  // namespace HeroChestCfg
+
+// --- Treasure cluster: close_chest.glb instance 1 (left foreground framing) ---
+namespace ClosedChest1Cfg {
+constexpr float kTargetSize = 1.45f;
+constexpr float CLOSED_CHEST_1_POS_X = -3.4f;
+constexpr float CLOSED_CHEST_1_POS_Z = -6.8f;
+constexpr float CLOSED_CHEST_1_SEABED_Y_OFFSET = 1.28f;
+constexpr float CLOSED_CHEST_1_ROT_X = 14.0f;
+constexpr float CLOSED_CHEST_1_ROT_Y = 58.0f;
+constexpr float CLOSED_CHEST_1_ROT_Z = -11.0f;
+constexpr float CLOSED_CHEST_1_SCALE = 2.0f;
+}  // namespace ClosedChest1Cfg
+
+// --- Treasure cluster: close_chest.glb instance 2 (behind hero, midground stack) ---
+namespace ClosedChest2Cfg {
+constexpr float kTargetSize = 1.35f;
+constexpr float CLOSED_CHEST_2_POS_X = -2.5f;
+constexpr float CLOSED_CHEST_2_POS_Z = -11.8f;
+constexpr float CLOSED_CHEST_2_SEABED_Y_OFFSET = 1.10f;
+constexpr float CLOSED_CHEST_2_ROT_X = -7.0f;
+constexpr float CLOSED_CHEST_2_ROT_Y = 22.0f;
+constexpr float CLOSED_CHEST_2_ROT_Z = 6.0f;
+constexpr float CLOSED_CHEST_2_SCALE = 1.84f;
+}  // namespace ClosedChest2Cfg
+
 #ifndef GL_POINTS
 #define GL_POINTS 0x0000
 #endif
@@ -52,6 +116,16 @@ static float seabedHeightAt(float x, float z) {
     const float pits = -0.85f * pitA - 0.65f * pitB - 0.75f * pitC - 0.6f * pitD;
 
     return base + duneWaves * 0.38f + ridge * 0.3f + cross + pits;
+}
+
+static glm::mat4 makeAnchorTransform(float x, float z, float seabedYOffset, float rotXDeg, float rotYDeg, float rotZDeg,
+                                     const glm::vec3& scale) {
+    const float y = seabedHeightAt(x, z) + seabedYOffset;
+    return glm::translate(glm::mat4(1.0f), glm::vec3(x, y, z)) *
+           glm::rotate(glm::mat4(1.0f), glm::radians(rotXDeg), glm::vec3(1.0f, 0.0f, 0.0f)) *
+           glm::rotate(glm::mat4(1.0f), glm::radians(rotYDeg), glm::vec3(0.0f, 1.0f, 0.0f)) *
+           glm::rotate(glm::mat4(1.0f), glm::radians(rotZDeg), glm::vec3(0.0f, 0.0f, 1.0f)) *
+           glm::scale(glm::mat4(1.0f), scale);
 }
 
 static std::string assetPath(const std::string& rel) {
@@ -347,9 +421,12 @@ Shader particlesShader;
     piranha.load(assetPath("Piranha.glb"), 1.0f);
     piranha.setupCircularPath(glm::vec3(12.0f, 3.0f, -12.0f), 6.0f, 6);
 
-    Anglerfish chest, anchor, barrel, urchin;
-    chest.load(assetPath("Chest.glb"), 1.5f);
-    anchor.load(assetPath("Anchor.glb"), 1.5f);
+    Anglerfish heroChestGold, closedChest1, closedChest2, anchorGreen, anchorBrown, barrel, urchin;
+    heroChestGold.load(assetPath("chest_gold.glb"), HeroChestCfg::kTargetSize);
+    closedChest1.load(assetPath("close_chest.glb"), ClosedChest1Cfg::kTargetSize);
+    closedChest2.load(assetPath("close_chest.glb"), ClosedChest2Cfg::kTargetSize);
+    anchorGreen.load(assetPath("anchor_green.glb"), AnchorGreenCfg::kTargetSize);
+    anchorBrown.load(assetPath("anchor_brown.glb"), AnchorBrownCfg::kTargetSize);
     barrel.load(assetPath("Barrel.glb"), 1.2f);
     urchin.load(assetPath("Urchin.glb"), 0.8f);
 
@@ -367,10 +444,34 @@ Shader particlesShader;
         glm::translate(glm::mat4(1.0f), glm::vec3(castleX, castleY, castleZ)) *
         glm::rotate(glm::mat4(1.0f), glm::radians(-20.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
-    const glm::mat4 chestTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-3.0f, 0.7f, -13.0f)) *
-                                     glm::rotate(glm::mat4(1.0f), glm::radians(15.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    const glm::mat4 anchorTransform = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 0.3f, -14.0f)) *
-                                      glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    const glm::mat4 heroChestTransform = makeAnchorTransform(
+        HeroChestCfg::HERO_CHEST_POS_X, HeroChestCfg::HERO_CHEST_POS_Z, HeroChestCfg::HERO_CHEST_SEABED_Y_OFFSET,
+        HeroChestCfg::HERO_CHEST_ROT_X, HeroChestCfg::HERO_CHEST_ROT_Y, HeroChestCfg::HERO_CHEST_ROT_Z,
+        glm::vec3(HeroChestCfg::HERO_CHEST_SCALE));
+    const glm::mat4 closedChest1Transform = makeAnchorTransform(
+        ClosedChest1Cfg::CLOSED_CHEST_1_POS_X, ClosedChest1Cfg::CLOSED_CHEST_1_POS_Z,
+        ClosedChest1Cfg::CLOSED_CHEST_1_SEABED_Y_OFFSET, ClosedChest1Cfg::CLOSED_CHEST_1_ROT_X,
+        ClosedChest1Cfg::CLOSED_CHEST_1_ROT_Y, ClosedChest1Cfg::CLOSED_CHEST_1_ROT_Z,
+        glm::vec3(ClosedChest1Cfg::CLOSED_CHEST_1_SCALE));
+    const glm::mat4 closedChest2Transform = makeAnchorTransform(
+        ClosedChest2Cfg::CLOSED_CHEST_2_POS_X, ClosedChest2Cfg::CLOSED_CHEST_2_POS_Z,
+        ClosedChest2Cfg::CLOSED_CHEST_2_SEABED_Y_OFFSET, ClosedChest2Cfg::CLOSED_CHEST_2_ROT_X,
+        ClosedChest2Cfg::CLOSED_CHEST_2_ROT_Y, ClosedChest2Cfg::CLOSED_CHEST_2_ROT_Z,
+        glm::vec3(ClosedChest2Cfg::CLOSED_CHEST_2_SCALE));
+    const glm::mat4 anchorGreenTransform = makeAnchorTransform(
+        AnchorGreenCfg::kPosX, AnchorGreenCfg::kPosZ, AnchorGreenCfg::kSeabedYOffset, AnchorGreenCfg::kRotXDeg,
+        AnchorGreenCfg::kRotYDeg, AnchorGreenCfg::kRotZDeg,
+        glm::vec3(AnchorGreenCfg::kScaleX, AnchorGreenCfg::kScaleY, AnchorGreenCfg::kScaleZ));
+    const glm::mat4 anchorBrownTransform = makeAnchorTransform(
+        AnchorBrownCfg::kPosX, AnchorBrownCfg::kPosZ, AnchorBrownCfg::kSeabedYOffset, AnchorBrownCfg::kRotXDeg,
+        AnchorBrownCfg::kRotYDeg, AnchorBrownCfg::kRotZDeg,
+        glm::vec3(AnchorBrownCfg::kScaleX, AnchorBrownCfg::kScaleY, AnchorBrownCfg::kScaleZ));
+    {
+        const float anchorBrownY =
+            seabedHeightAt(AnchorBrownCfg::kPosX, AnchorBrownCfg::kPosZ) + AnchorBrownCfg::kSeabedYOffset;
+        std::cout << "anchor_brown world position: glm::vec3(" << AnchorBrownCfg::kPosX << "f, " << anchorBrownY
+                  << "f, " << AnchorBrownCfg::kPosZ << "f)\n";
+    }
     const glm::mat4 barrelTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-4.5f, 0.6f, -14.5f)) *
                                       glm::rotate(glm::mat4(1.0f), glm::radians(70.0f), glm::vec3(1.0f, 0.0f, 0.0f)) *
                                       glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -686,8 +787,11 @@ Shader particlesShader;
                 shadowShader.setBool("useSkin", false);
                 for (const auto& sub : castleChurch.submeshes) sub.mesh.draw();
             }
-            drawStaticShadow(chest, chestTransform);
-            drawStaticShadow(anchor, anchorTransform);
+            drawStaticShadow(heroChestGold, heroChestTransform);
+            drawStaticShadow(closedChest1, closedChest1Transform);
+            drawStaticShadow(closedChest2, closedChest2Transform);
+            drawStaticShadow(anchorGreen, anchorGreenTransform);
+            drawStaticShadow(anchorBrown, anchorBrownTransform);
             drawStaticShadow(barrel, barrelTransform);
             drawStaticShadow(urchin, urchinTransform);
 
@@ -730,6 +834,7 @@ Shader particlesShader;
         pbrShader.setBool("useNormalMap", true);
         pbrShader.setBool("useSkin", false);
         pbrShader.setBool("useKelpSway", false);
+        pbrShader.setBool("u_enableTopMoss", false);
         for (int i = 0; i < kNumLights; ++i) {
             const std::string idx = std::to_string(i);
             pbrShader.setVec3(("lightPositions[" + idx + "]").c_str(), lightPos[i]);
@@ -811,8 +916,14 @@ Shader particlesShader;
                         castleChurch.whiteScalar, castleChurch.whiteScalar, sub.emissive);
             }
         }
-        drawStaticPBR(chest, chestTransform);
-        drawStaticPBR(anchor, anchorTransform);
+        drawStaticPBR(heroChestGold, heroChestTransform);
+        drawStaticPBR(closedChest1, closedChest1Transform);
+        drawStaticPBR(closedChest2, closedChest2Transform);
+        pbrShader.setBool("u_enableTopMoss", false);
+        drawStaticPBR(anchorGreen, anchorGreenTransform);
+        pbrShader.setBool("u_enableTopMoss", true);
+        drawStaticPBR(anchorBrown, anchorBrownTransform);
+        pbrShader.setBool("u_enableTopMoss", false);
         drawStaticPBR(barrel, barrelTransform);
         drawStaticPBR(urchin, urchinTransform);
         pbrShader.setBool("useNormalMap", true);
