@@ -11,6 +11,7 @@ public:
 
     void createRGBA(int w, int h, const std::vector<unsigned char>& pixels, bool mipmaps = true);
     static Texture2D loadFromFile(const std::string& path, bool mipmaps = true);
+    static Texture2D loadFromMemory(const unsigned char* data, int size, bool mipmaps = true);
     void bind(unsigned int unit) const;
     void destroy();
 };

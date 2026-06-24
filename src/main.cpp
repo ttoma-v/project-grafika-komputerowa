@@ -32,7 +32,7 @@ static double gLastY = 0.0;
 static bool gKeys[1024]{};
 static bool gHeadlightsOn = true;
 static bool gShadowsEnabled = true;
-static float gFogDensity = 0.018f;
+static float gFogDensity = 0.012f;
 static float gDistortionStrength = 0.003f;
 
 #ifndef GL_POINTS
@@ -226,6 +226,10 @@ static void drawPBR(const Shader& shader, const Mesh& mesh, const glm::mat4& mod
     mesh.draw();
 }
 
+static const Texture2D& submeshAlbedo(const ModelLoader::SubMesh& sub, const ModelLoader::GltfModel& model) {
+    return sub.albedo.id ? sub.albedo : model.whiteAlbedo;
+}
+
 int main() {
     if (!glfwInit()) {
         std::cerr << "GLFW init failed\n";
@@ -328,7 +332,7 @@ Shader particlesShader;
     auto skyCube = ProceduralTextures::makeUnderwaterSky();
     Mesh skyboxMesh = makeSkyboxCube();
     Mesh screenQuad = makeScreenQuad();
-    const float kSeabedSize = 80.0f;
+    const float kSeabedSize = 100.0f;
     const float kSeabedHalf = kSeabedSize * 0.5f;
     Mesh seabed = Geometry::makeSeabed(kSeabedSize, kSeabedSize, 32);
     const glm::mat4 floorTransform(1.0f);
@@ -348,6 +352,20 @@ Shader particlesShader;
     anchor.load(assetPath("Anchor.glb"), 1.5f);
     barrel.load(assetPath("Barrel.glb"), 1.2f);
     urchin.load(assetPath("Urchin.glb"), 0.8f);
+
+    constexpr float kCastleTargetSize = 66.0f;
+    const float castleX = 15.0f;
+    const float castleZ = -40.0f;
+    ModelLoader::GltfModel castleChurch;
+    if (!ModelLoader::loadGlb(assetPath("castle_church.glb"), castleChurch, kCastleTargetSize)) {
+        std::cerr << "Failed to load castle_church.glb. Ensure assets/castle_church.glb exists.\n";
+        return 1;
+    }
+
+    const float castleY = seabedHeightAt(castleX, castleZ) + kCastleTargetSize * 0.5f;
+    const glm::mat4 castleChurchTransform =
+        glm::translate(glm::mat4(1.0f), glm::vec3(castleX, castleY, castleZ)) *
+        glm::rotate(glm::mat4(1.0f), glm::radians(-20.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
     const glm::mat4 chestTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-3.0f, 0.7f, -13.0f)) *
                                      glm::rotate(glm::mat4(1.0f), glm::radians(15.0f), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -663,6 +681,11 @@ Shader particlesShader;
                 shadowShader.setBool("useSkin", false);
                 for (const auto& sub : obj.submeshes()) sub.mesh.draw();
             };
+            if (castleChurch.valid) {
+                shadowShader.setMat4("model", castleChurchTransform);
+                shadowShader.setBool("useSkin", false);
+                for (const auto& sub : castleChurch.submeshes) sub.mesh.draw();
+            }
             drawStaticShadow(chest, chestTransform);
             drawStaticShadow(anchor, anchorTransform);
             drawStaticShadow(barrel, barrelTransform);
@@ -753,7 +776,7 @@ Shader particlesShader;
             uploadJoints(pbrShader, anglerfish.joints());
             for (const auto& sub : anglerfish.submeshes()) {
                 drawPBR(pbrShader, sub.mesh, anglerfishTransform, sub.baseColorFactor, sub.metallicFactor,
-                          sub.roughnessFactor, anglerfishModel.whiteAlbedo, anglerfishModel.flatNormal,
+                          sub.roughnessFactor, submeshAlbedo(sub, anglerfishModel), anglerfishModel.flatNormal,
                           anglerfishModel.whiteScalar, anglerfishModel.whiteScalar, sub.emissive);
             }
             pbrShader.setBool("useSkin", false);
@@ -765,8 +788,8 @@ Shader particlesShader;
             uploadJoints(pbrShader, piranha.joints());
             for (const auto& sub : piranha.submeshes()) {
                 drawPBR(pbrShader, sub.mesh, piranhaTransform, sub.baseColorFactor, sub.metallicFactor,
-                          sub.roughnessFactor, piranhaModel.whiteAlbedo, piranhaModel.flatNormal, piranhaModel.whiteScalar,
-                          piranhaModel.whiteScalar, sub.emissive);
+                          sub.roughnessFactor, submeshAlbedo(sub, piranhaModel), piranhaModel.flatNormal,
+                          piranhaModel.whiteScalar, piranhaModel.whiteScalar, sub.emissive);
             }
             pbrShader.setBool("useSkin", false);
         }
@@ -777,9 +800,17 @@ Shader particlesShader;
             pbrShader.setBool("useSkin", false);
             for (const auto& sub : obj.submeshes()) {
                 drawPBR(pbrShader, sub.mesh, trans, sub.baseColorFactor, sub.metallicFactor, sub.roughnessFactor,
-                        mod.whiteAlbedo, mod.flatNormal, mod.whiteScalar, mod.whiteScalar, sub.emissive);
+                        submeshAlbedo(sub, mod), mod.flatNormal, mod.whiteScalar, mod.whiteScalar, sub.emissive);
             }
         };
+        if (castleChurch.valid) {
+            pbrShader.setBool("useSkin", false);
+            for (const auto& sub : castleChurch.submeshes) {
+                drawPBR(pbrShader, sub.mesh, castleChurchTransform, sub.baseColorFactor, sub.metallicFactor,
+                        sub.roughnessFactor, submeshAlbedo(sub, castleChurch), castleChurch.flatNormal,
+                        castleChurch.whiteScalar, castleChurch.whiteScalar, sub.emissive);
+            }
+        }
         drawStaticPBR(chest, chestTransform);
         drawStaticPBR(anchor, anchorTransform);
         drawStaticPBR(barrel, barrelTransform);

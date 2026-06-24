@@ -32,6 +32,26 @@ static float smoothNoise(float x, float y, int seed) {
     return glm::mix(glm::mix(a, b, ux), glm::mix(c, d, ux), uy);
 }
 
+Texture2D Texture2D::loadFromMemory(const unsigned char* data, int size, bool mipmaps) {
+    int w = 0;
+    int h = 0;
+    int channels = 0;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* pixels = stbi_load_from_memory(data, size, &w, &h, &channels, 4);
+    if (!pixels) {
+        std::cerr << "Failed to load texture from memory (" << stbi_failure_reason() << ")\n";
+        return {};
+    }
+
+    std::vector<unsigned char> rgba(static_cast<size_t>(w) * static_cast<size_t>(h) * 4);
+    std::copy(pixels, pixels + rgba.size(), rgba.begin());
+    stbi_image_free(pixels);
+
+    Texture2D tex;
+    tex.createRGBA(w, h, rgba, mipmaps);
+    return tex;
+}
+
 Texture2D Texture2D::loadFromFile(const std::string& path, bool mipmaps) {
     int w = 0;
     int h = 0;

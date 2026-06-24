@@ -19,6 +19,7 @@ struct SubMesh {
     float roughnessFactor = 0.85f;
     bool doubleSided = false;
     glm::vec3 bindCentroid{0.0f};
+    Texture2D albedo;
 };
 
 struct AnimationSampler {

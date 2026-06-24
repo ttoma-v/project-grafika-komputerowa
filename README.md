@@ -73,6 +73,7 @@ cmake --build build --config Release
 - Scattered corals and rocks
 - Kelp along PTF splines + 48 scattered blades
 - Anglerfish and piranha on circular swim paths (skinned GLB animation)
+- Background ruins: `castle_church.glb` (sunken gothic cathedral, distant horizon)
 - Static props: chest, anchor, barrel, urchin
 - Full scene rendered to an offscreen FBO, then flow-map post-process to the screen
 

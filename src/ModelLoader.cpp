@@ -10,9 +10,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <filesystem>
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <unordered_map>
 
 namespace {
 
@@ -130,7 +133,43 @@ Texture2D makeScalar(float value) {
     return tex;
 }
 
-void readMaterial(const cgltf_primitive& prim, ModelLoader::SubMesh& sub) {
+Texture2D loadCgltfImage(const cgltf_image* image, const std::string& modelDir) {
+    if (!image) return {};
+
+    if (image->buffer_view) {
+        const uint8_t* data = cgltf_buffer_view_data(image->buffer_view);
+        if (!data) return {};
+        return Texture2D::loadFromMemory(data, static_cast<int>(image->buffer_view->size));
+    }
+
+    if (image->uri && image->uri[0] != '\0') {
+        if (std::strncmp(image->uri, "data:", 5) == 0) {
+            return {};
+        }
+
+        std::filesystem::path path = image->uri;
+        if (!path.is_absolute()) path = std::filesystem::path(modelDir) / path;
+        return Texture2D::loadFromFile(path.string());
+    }
+
+    return {};
+}
+
+Texture2D loadCgltfTexture(const cgltf_texture* texture, const std::string& modelDir,
+                           std::unordered_map<const cgltf_image*, Texture2D>& cache) {
+    if (!texture || !texture->image) return {};
+
+    const cgltf_image* image = texture->image;
+    const auto found = cache.find(image);
+    if (found != cache.end()) return found->second;
+
+    Texture2D loaded = loadCgltfImage(image, modelDir);
+    if (loaded.id) cache.emplace(image, loaded);
+    return loaded;
+}
+
+void readMaterial(const cgltf_primitive& prim, ModelLoader::SubMesh& sub, const std::string& modelDir,
+                  std::unordered_map<const cgltf_image*, Texture2D>& imageCache) {
     if (!prim.material) return;
 
     const cgltf_material& mat = *prim.material;
@@ -141,6 +180,9 @@ void readMaterial(const cgltf_primitive& prim, ModelLoader::SubMesh& sub) {
         sub.baseColorFactor = glm::vec3(pbr.base_color_factor[0], pbr.base_color_factor[1], pbr.base_color_factor[2]);
         sub.metallicFactor = pbr.metallic_factor;
         sub.roughnessFactor = pbr.roughness_factor;
+        if (pbr.base_color_texture.texture) {
+            sub.albedo = loadCgltfTexture(pbr.base_color_texture.texture, modelDir, imageCache);
+        }
     }
 }
 
@@ -278,6 +320,9 @@ bool loadGlb(const std::string& path, GltfModel& out, float targetSize) {
     parseSkeleton(data, out);
     parseAnimations(data, out);
 
+    const std::string modelDir = std::filesystem::path(path).parent_path().string();
+    std::unordered_map<const cgltf_image*, Texture2D> imageCache;
+
     struct RawSub {
         std::vector<Vertex> vertices;
         std::vector<unsigned int> indices;
@@ -302,7 +347,7 @@ bool loadGlb(const std::string& path, GltfModel& out, float targetSize) {
             RawSub raw;
             appendPrimitive(mesh.primitives[p], world, raw.vertices, raw.indices);
             if (raw.vertices.empty() || raw.indices.empty()) continue;
-            readMaterial(mesh.primitives[p], raw.material);
+            readMaterial(mesh.primitives[p], raw.material, modelDir, imageCache);
             raws.push_back(std::move(raw));
         }
     }
@@ -363,6 +408,7 @@ bool loadGlb(const std::string& path, GltfModel& out, float targetSize) {
         sub.metallicFactor = raw.material.metallicFactor;
         sub.roughnessFactor = raw.material.roughnessFactor;
         sub.doubleSided = raw.material.doubleSided;
+        sub.albedo = raw.material.albedo;
         sub.bindCentroid = centroid;
         sub.mesh.upload(raw.vertices, raw.indices);
         totalTris += raw.indices.size() / 3;

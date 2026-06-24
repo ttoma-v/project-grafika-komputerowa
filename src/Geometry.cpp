@@ -154,6 +154,10 @@ Mesh Geometry::makeSeabed(float width, float depth, int subdivisions) {
     std::vector<Vertex> verts;
     std::vector<unsigned int> inds;
     const int n = subdivisions + 1;
+    constexpr float kReferenceSeabedSize = 80.0f;
+    constexpr float kReferenceUvTiling = 12.0f;
+    const float uvTilingX = kReferenceUvTiling * (width / kReferenceSeabedSize);
+    const float uvTilingZ = kReferenceUvTiling * (depth / kReferenceSeabedSize);
     for (int z = 0; z < n; ++z) {
         for (int x = 0; x < n; ++x) {
             const float fx = static_cast<float>(x) / subdivisions;
@@ -166,7 +170,7 @@ Mesh Geometry::makeSeabed(float width, float depth, int subdivisions) {
             Vertex v;
             v.position = glm::vec3(px, py, pz);
             v.normal = normal;
-            v.uv = glm::vec2(fx * 12.0f, fz * 12.0f);
+            v.uv = glm::vec2(fx * uvTilingX, fz * uvTilingZ);
             const glm::vec3 tangent = glm::normalize(glm::vec3(1.0f, std::cos(px * 0.2f) * 0.08f, 0.0f));
             v.tangent = tangent;
             v.bitangent = glm::normalize(glm::cross(normal, tangent));
