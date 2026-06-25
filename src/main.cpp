@@ -54,7 +54,7 @@ namespace AnchorBrownCfg {
 constexpr float kTargetSize = 1.45f;
 constexpr float kPosX = -1.5f;
 constexpr float kPosZ = -5.0f;
-constexpr float kSeabedYOffset = 1.66f;
+constexpr float kSeabedYOffset = 1.26f;
 constexpr float kRotXDeg = 95.0f;
 constexpr float kRotYDeg = -25.0f;
 constexpr float kRotZDeg = 8.0f;
@@ -68,7 +68,7 @@ namespace HeroChestCfg {
 constexpr float kTargetSize = 1.65f;
 constexpr float HERO_CHEST_POS_X = 6.2f;
 constexpr float HERO_CHEST_POS_Z = -9.5f;
-constexpr float HERO_CHEST_SEABED_Y_OFFSET = 1.40f;
+constexpr float HERO_CHEST_SEABED_Y_OFFSET = 1.00f;
 constexpr float HERO_CHEST_ROT_X = 6.0f;
 constexpr float HERO_CHEST_ROT_Y = -38.0f;
 constexpr float HERO_CHEST_ROT_Z = 3.0f;
@@ -80,7 +80,7 @@ namespace ClosedChest1Cfg {
 constexpr float kTargetSize = 1.45f;
 constexpr float CLOSED_CHEST_1_POS_X = -3.4f;
 constexpr float CLOSED_CHEST_1_POS_Z = -6.8f;
-constexpr float CLOSED_CHEST_1_SEABED_Y_OFFSET = 1.28f;
+constexpr float CLOSED_CHEST_1_SEABED_Y_OFFSET = 0.88f;
 constexpr float CLOSED_CHEST_1_ROT_X = 14.0f;
 constexpr float CLOSED_CHEST_1_ROT_Y = 58.0f;
 constexpr float CLOSED_CHEST_1_ROT_Z = -11.0f;
@@ -92,7 +92,7 @@ namespace ClosedChest2Cfg {
 constexpr float kTargetSize = 1.35f;
 constexpr float CLOSED_CHEST_2_POS_X = -2.5f;
 constexpr float CLOSED_CHEST_2_POS_Z = -11.8f;
-constexpr float CLOSED_CHEST_2_SEABED_Y_OFFSET = 1.10f;
+constexpr float CLOSED_CHEST_2_SEABED_Y_OFFSET = 0.70f;
 constexpr float CLOSED_CHEST_2_ROT_X = -7.0f;
 constexpr float CLOSED_CHEST_2_ROT_Y = 22.0f;
 constexpr float CLOSED_CHEST_2_ROT_Z = 6.0f;
@@ -411,17 +411,17 @@ Shader particlesShader;
     Mesh seabed = Geometry::makeSeabed(kSeabedSize, kSeabedSize, 32);
     const glm::mat4 floorTransform(1.0f);
 
-    const glm::vec3 anglerfishCircleCenter{0.0f, 1.6f, -20.0f};
+    const glm::vec3 anglerfishCircleCenter{-28.0f, 1.6f, -14.0f};
 
     Anglerfish anglerfish;
     anglerfish.load(assetPath("Anglerfish.glb"), 2.0f);
-    anglerfish.setupCircularPath(anglerfishCircleCenter, 8.0f, 8);
+    anglerfish.setupCircularPath(anglerfishCircleCenter, 5.5f, 8);
 
     Anglerfish piranha;
     piranha.load(assetPath("Piranha.glb"), 1.0f);
     piranha.setupCircularPath(glm::vec3(12.0f, 3.0f, -12.0f), 6.0f, 6);
 
-    Anglerfish heroChestGold, closedChest1, closedChest2, anchorGreen, anchorBrown, barrel, urchin;
+    Anglerfish heroChestGold, closedChest1, closedChest2, anchorGreen, anchorBrown, barrel, urchin, cannon;
     heroChestGold.load(assetPath("chest_gold.glb"), HeroChestCfg::kTargetSize);
     closedChest1.load(assetPath("close_chest.glb"), ClosedChest1Cfg::kTargetSize);
     closedChest2.load(assetPath("close_chest.glb"), ClosedChest2Cfg::kTargetSize);
@@ -429,6 +429,7 @@ Shader particlesShader;
     anchorBrown.load(assetPath("anchor_brown.glb"), AnchorBrownCfg::kTargetSize);
     barrel.load(assetPath("Barrel.glb"), 1.2f);
     urchin.load(assetPath("Urchin.glb"), 0.8f);
+    cannon.load(assetPath("Cannon.glb"), 1.35f);
 
     constexpr float kCastleTargetSize = 66.0f;
     const float castleX = 15.0f;
@@ -448,6 +449,9 @@ Shader particlesShader;
         HeroChestCfg::HERO_CHEST_POS_X, HeroChestCfg::HERO_CHEST_POS_Z, HeroChestCfg::HERO_CHEST_SEABED_Y_OFFSET,
         HeroChestCfg::HERO_CHEST_ROT_X, HeroChestCfg::HERO_CHEST_ROT_Y, HeroChestCfg::HERO_CHEST_ROT_Z,
         glm::vec3(HeroChestCfg::HERO_CHEST_SCALE));
+    const glm::mat4 cannonTransform = makeAnchorTransform(
+        HeroChestCfg::HERO_CHEST_POS_X + 3.0f, HeroChestCfg::HERO_CHEST_POS_Z - 0.2f, 0.95f, 15.0f, -40.0f, 0.0f,
+        glm::vec3(1.4f));
     const glm::mat4 closedChest1Transform = makeAnchorTransform(
         ClosedChest1Cfg::CLOSED_CHEST_1_POS_X, ClosedChest1Cfg::CLOSED_CHEST_1_POS_Z,
         ClosedChest1Cfg::CLOSED_CHEST_1_SEABED_Y_OFFSET, ClosedChest1Cfg::CLOSED_CHEST_1_ROT_X,
@@ -786,6 +790,7 @@ Shader particlesShader;
                 for (const auto& sub : castleChurch.submeshes) sub.mesh.draw();
             }
             drawStaticShadow(heroChestGold, heroChestTransform);
+            drawStaticShadow(cannon, cannonTransform);
             drawStaticShadow(closedChest1, closedChest1Transform);
             drawStaticShadow(closedChest2, closedChest2Transform);
             drawStaticShadow(anchorGreen, anchorGreenTransform);
@@ -915,6 +920,7 @@ Shader particlesShader;
             }
         }
         drawStaticPBR(heroChestGold, heroChestTransform);
+        drawStaticPBR(cannon, cannonTransform);
         drawStaticPBR(closedChest1, closedChest1Transform);
         drawStaticPBR(closedChest2, closedChest2Transform);
         pbrShader.setBool("u_enableTopMoss", false);
