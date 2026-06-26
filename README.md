@@ -2,7 +2,8 @@
 
 Interactive underwater OpenGL 3.3 application (C++ / GLSL). View from a bathyscaphe interior toward a dark seabed with sand, corals, kelp, animated fish, GLB props, submarine headlights, and flow-map underwater distortion.
 
-**Team members:** Romanov, Dutka, Eivazava gr. 13
+**Team members:** Mikhail Romanov, Tamara Dutka, Hanna Eivazava gr. 13
+Repository: https://github.com/ttoma-v/project-grafika-komputerowa.git
 
 ## Implemented methods
 
@@ -13,9 +14,14 @@ Interactive underwater OpenGL 3.3 application (C++ / GLSL). View from a bathysca
 | **PBR lighting** (metallic/roughness, Cook-Torrance) | `assets/shaders/pbr.frag` |
 | **Normal mapping** (TBN, sand + coral materials) | `pbr.vert`, `pbr.frag`, `Texture.cpp` |
 | **Shadow mapping** (depth bias + 3×3 PCF) | `shadow_depth.*`, `pbr.frag`, `main.cpp` |
-| **Parallel Transport Frames** (kelp spline) | `src/PTF.cpp`, `Geometry.cpp`, `main.cpp` |
+| **Parallel Transport Frames** (fish swim paths + kelp splines) | `src/PTF.cpp`, `Geometry.cpp`, `main.cpp` |
 | **A14 — Flow-map distortion** | `screen.frag`, `ProceduralTextures::makeFlowMap()`, offscreen FBO in `main.cpp` |
 | **B13 — Moving point lights** | Camera headlights + lure light in `main.cpp` |
+
+### Selected combination details
+
+* **A14 (Flow-map current distortion):** Implemented as a full-screen post-processing pass (`screen.frag`). The entire 3D scene is rendered into an offscreen FBO, and then sampled with UV coordinates offset over time via a procedural 2D flow vector texture (`ProceduralTextures::makeFlowMap()`).
+* **B13 (Moving point lights):** Driven by per-frame CPU updates in `main.cpp`. Includes two sweeping spotlights attached to the camera (bathyscaphe headlights) and one dynamic point light attached to the animated Anglerfish lure (`sin(time)` intensity modulation).
 
 ## Build
 
@@ -65,11 +71,12 @@ cmake --build build --config Release
 | **[** | Decrease underwater fog density |
 | **]** | Increase underwater fog density |
 | **G** | Cycle flow distortion: off → normal (0.003) → strong (0.006) |
+| **T** | Toggle shadow mapping on/off |
 | Esc | Quit |
 
 ## Scene
 
-- **80×80** procedural seabed with sand PBR + normal maps
+- **100×100** procedural seabed with sand PBR + normal maps
 - Scattered corals and rocks
 - Kelp along PTF splines + 48 scattered blades
 - Anglerfish and piranha on circular swim paths (skinned GLB animation)
@@ -79,4 +86,8 @@ cmake --build build --config Release
 
 ## Screenshots
 
-_Add capture images here before submission._
+![Close-up of treasure chest, PBR materials, and normal mapping](screenshots/shot_1.jpeg)
+
+![Seabed composition with bathyscaphe spotlight illumination](screenshots/shot_2.jpeg)
+
+![Distant sunken cathedral ruins and Anglerfish with B13 point light](screenshots/shot_3.jpeg)
