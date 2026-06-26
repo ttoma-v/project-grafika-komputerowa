@@ -5,10 +5,14 @@
 #include <algorithm>
 #include <cmath>
 
+void Camera::setLook(float yawRad, float pitchRad) {
+    const glm::quat qYaw = glm::angleAxis(yawRad, glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::quat qPitch = glm::angleAxis(pitchRad, glm::vec3(1.0f, 0.0f, 0.0f));
+    orientation = glm::normalize(qYaw * qPitch);
+}
+
 glm::quat Camera::orientationQuat() const {
-    const glm::quat qYaw = glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f));
-    const glm::quat qPitch = glm::angleAxis(pitch, glm::vec3(1.0f, 0.0f, 0.0f));
-    return glm::normalize(qYaw * qPitch);
+    return orientation;
 }
 
 glm::vec3 Camera::forward() const {
@@ -33,9 +37,19 @@ glm::mat4 Camera::projectionMatrix(float aspect) const {
 }
 
 void Camera::processMouse(float dx, float dy) {
-    yaw -= dx * mouseSensitivity;
-    pitch += dy * mouseSensitivity;
-    pitch = std::clamp(pitch, -pitchLimit, pitchLimit);
+    const float yawDelta = -dx * mouseSensitivity;
+    float pitchDelta = dy * mouseSensitivity;
+
+    // World-space yaw (pre-multiply) keeps the horizon level: no accumulated roll.
+    orientation = glm::normalize(glm::angleAxis(yawDelta, glm::vec3(0.0f, 1.0f, 0.0f)) * orientation);
+
+    // Limit total pitch so the view never flips past vertical.
+    const float currentPitch = std::asin(std::clamp(forward().y, -1.0f, 1.0f));
+    const float newPitch = std::clamp(currentPitch + pitchDelta, -pitchLimit, pitchLimit);
+    pitchDelta = newPitch - currentPitch;
+
+    // Local-space pitch (post-multiply) around the camera's own right axis.
+    orientation = glm::normalize(orientation * glm::angleAxis(pitchDelta, glm::vec3(1.0f, 0.0f, 0.0f)));
 }
 
 void Camera::processKeyboard(bool fwd, bool back, bool left, bool rightKey, bool upKey, bool downKey, float dt) {
