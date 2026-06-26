@@ -21,6 +21,7 @@ public:
     void update(float time);
 
     bool valid() const { return model_.valid; }
+    bool hasSkeleton() const { return model_.hasSkin && model_.jointCount > 0; }
     const glm::mat4& transform() const { return transform_; }
     const std::vector<glm::mat4>& joints() const { return joints_; }
     const std::vector<ModelLoader::SubMesh>& submeshes() const { return model_.submeshes; }

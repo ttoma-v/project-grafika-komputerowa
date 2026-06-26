@@ -35,6 +35,9 @@ static bool gShadowsEnabled = true;
 static float gFogDensity = 0.012f;
 static float gDistortionStrength = 0.003f;
 
+// === HERRING (SLEDZ) CONFIG ===
+const float SLEDZ_SCALE = 0.5f;
+
 // --- Primary anchor: anchor_green.glb (foreground seabed) ---
 namespace AnchorGreenCfg {
 constexpr float kTargetSize = 1.5f;
@@ -421,6 +424,21 @@ Shader particlesShader;
     piranha.load(assetPath("Piranha.glb"), 1.0f);
     piranha.setupCircularPath(glm::vec3(12.0f, 3.0f, -12.0f), 6.0f, 6);
 
+    std::vector<Anglerfish> sledzSchool(6);
+    const glm::vec3 sledzFlockCenter{-6.5f, 4.2f, -14.0f};
+    const float sOffX[6] = {0.0f, 1.4f, -1.2f, 0.7f, -1.8f, 0.9f};
+    const float sOffY[6] = {0.0f, 0.6f, -0.5f, 0.9f, -0.8f, 0.3f};
+    const float sOffZ[6] = {0.0f, -1.2f, 0.9f, 1.4f, -0.6f, -1.5f};
+    const float sRad[6] = {4.5f, 4.1f, 4.9f, 3.8f, 5.1f, 4.3f};
+    const float sSpd[6] = {0.075f, 0.083f, 0.067f, 0.079f, 0.071f, 0.086f};
+
+    for (int i = 0; i < 6; ++i) {
+        sledzSchool[i].load(assetPath("fish_sledz.glb"), SLEDZ_SCALE);
+        glm::vec3 c = sledzFlockCenter + glm::vec3(sOffX[i], sOffY[i], sOffZ[i]);
+        sledzSchool[i].setupCircularPath(c, sRad[i], 8);
+        sledzSchool[i].pathSpeed = sSpd[i];
+    }
+
     Anglerfish heroChestGold, closedChest1, closedChest2, anchorGreen, anchorBrown, barrel, urchin, cannon;
     heroChestGold.load(assetPath("chest_gold.glb"), HeroChestCfg::kTargetSize);
     closedChest1.load(assetPath("close_chest.glb"), ClosedChest1Cfg::kTargetSize);
@@ -686,6 +704,7 @@ Shader particlesShader;
         const glm::mat4 anglerfishTransform = anglerfish.transform();
         piranha.update(time * 2.0f);
         const glm::mat4 piranhaTransform = piranha.transform();
+        for (auto& f : sledzSchool) f.update(time);
 
         constexpr int kNumLights = 3;
         glm::vec3 lightPos[kNumLights];
@@ -776,6 +795,20 @@ Shader particlesShader;
                 uploadJoints(shadowShader, piranha.joints());
                 for (const auto& sub : piranha.submeshes()) sub.mesh.draw();
                 shadowShader.setBool("useSkin", false);
+            }
+
+            for (auto& f : sledzSchool) {
+                if (!f.valid()) continue;
+                shadowShader.setMat4("model", f.transform());
+                if (f.hasSkeleton()) {
+                    shadowShader.setBool("useSkin", true);
+                    uploadJoints(shadowShader, f.joints());
+                    for (const auto& sub : f.submeshes()) sub.mesh.draw();
+                    shadowShader.setBool("useSkin", false);
+                } else {
+                    shadowShader.setBool("useSkin", false);
+                    for (const auto& sub : f.submeshes()) sub.mesh.draw();
+                }
             }
 
             auto drawStaticShadow = [&](const Anglerfish& obj, const glm::mat4& trans) {
@@ -900,6 +933,29 @@ Shader particlesShader;
                           piranhaModel.whiteScalar, piranhaModel.whiteScalar, sub.emissive);
             }
             pbrShader.setBool("useSkin", false);
+        }
+
+        for (auto& f : sledzSchool) {
+            if (!f.valid()) continue;
+            const glm::mat4 fTrans = f.transform();
+            const ModelLoader::GltfModel& fModel = f.model();
+            if (f.hasSkeleton()) {
+                pbrShader.setBool("useSkin", true);
+                uploadJoints(pbrShader, f.joints());
+                for (const auto& sub : f.submeshes()) {
+                    drawPBR(pbrShader, sub.mesh, fTrans, sub.baseColorFactor, sub.metallicFactor,
+                            sub.roughnessFactor, submeshAlbedo(sub, fModel), fModel.flatNormal,
+                            fModel.whiteScalar, fModel.whiteScalar, sub.emissive);
+                }
+                pbrShader.setBool("useSkin", false);
+            } else {
+                pbrShader.setBool("useSkin", false);
+                for (const auto& sub : f.submeshes()) {
+                    drawPBR(pbrShader, sub.mesh, fTrans, sub.baseColorFactor, sub.metallicFactor,
+                            sub.roughnessFactor, submeshAlbedo(sub, fModel), fModel.flatNormal,
+                            fModel.whiteScalar, fModel.whiteScalar, sub.emissive);
+                }
+            }
         }
 
         auto drawStaticPBR = [&](const Anglerfish& obj, const glm::mat4& trans) {
