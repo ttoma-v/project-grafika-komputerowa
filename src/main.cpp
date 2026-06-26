@@ -32,6 +32,7 @@ static double gLastY = 0.0;
 static bool gKeys[1024]{};
 static bool gHeadlightsOn = true;
 static bool gShadowsEnabled = true;
+static bool gReturnFishHome = false;
 static float gFogDensity = 0.012f;
 static float gDistortionStrength = 0.003f;
 
@@ -151,6 +152,7 @@ static void keyCallback(GLFWwindow* window, int key, int, int action, int) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
     if (key == GLFW_KEY_F && action == GLFW_PRESS) gHeadlightsOn = !gHeadlightsOn;
     if (key == GLFW_KEY_T && action == GLFW_PRESS) gShadowsEnabled = !gShadowsEnabled;
+    if (key == GLFW_KEY_H && action == GLFW_PRESS) gReturnFishHome = true;
     if (key == GLFW_KEY_LEFT_BRACKET && action == GLFW_PRESS) gFogDensity = glm::max(0.005f, gFogDensity - 0.003f);
     if (key == GLFW_KEY_RIGHT_BRACKET && action == GLFW_PRESS) gFogDensity = glm::min(0.05f, gFogDensity + 0.003f);
     if (key == GLFW_KEY_G && action == GLFW_PRESS) {
@@ -288,8 +290,7 @@ struct ShadowMap {
 
 static void drawPBR(const Shader& shader, const Mesh& mesh, const glm::mat4& model, const glm::vec3& tint, float metallic,
                     float roughness, const Texture2D& albedo, const Texture2D& normal, const Texture2D& metal,
-                    const Texture2D& rough, const glm::vec3& emissive = glm::vec3(0.0f),
-                    const Texture2D* flow = nullptr) {
+                    const Texture2D& rough, const glm::vec3& emissive = glm::vec3(0.0f)) {
     shader.setMat4("model", model);
     shader.setVec3("materialAlbedoTint", tint);
     shader.setFloat("materialMetallic", metallic);
@@ -299,7 +300,6 @@ static void drawPBR(const Shader& shader, const Mesh& mesh, const glm::mat4& mod
     normal.bind(1);
     metal.bind(2);
     rough.bind(3);
-    if (flow && flow->id) flow->bind(5);
     mesh.draw();
 }
 
@@ -358,8 +358,7 @@ int main() {
     glCullFace(GL_BACK);
 
     gCamera.position = glm::vec3(0.0f, 2.2f, 0.0f);
-    gCamera.yaw = 0.0f;
-    gCamera.pitch = glm::radians(-4.0f);
+    gCamera.setLook(0.0f, glm::radians(-4.0f));
 
     Shader skyShader;
     Shader shadowShader;
@@ -700,6 +699,13 @@ Shader particlesShader;
         const glm::mat4 proj = gCamera.projectionMatrix(safeAspect);
         const glm::mat4 view = gCamera.viewMatrix();
 
+        if (gReturnFishHome) {
+            anglerfish.resetPath(time);
+            piranha.resetPath(time * 2.0f);
+            for (auto& f : sledzSchool) f.resetPath(time);
+            gReturnFishHome = false;
+        }
+
         anglerfish.update(time);
         const glm::mat4 anglerfishTransform = anglerfish.transform();
         piranha.update(time * 2.0f);
@@ -863,7 +869,6 @@ Shader particlesShader;
         pbrShader.setInt("roughnessMap", 3);
         pbrShader.setInt("shadowMapFish", 4);
         pbrShader.setInt("shadowMapCam", 6);
-        pbrShader.setInt("flowMap", 5);
         pbrShader.setInt("numLights", kNumLights);
         pbrShader.setFloat("underwaterFogDensity", gFogDensity);
         pbrShader.setBool("shadowsEnabled", gShadowsEnabled);

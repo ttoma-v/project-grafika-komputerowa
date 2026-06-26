@@ -20,6 +20,9 @@ public:
     // Advances animation and recomputes transform/joints/lure for the frame.
     void update(float time);
 
+    // Snaps the fish back to the start of its swim path at the given time.
+    void resetPath(float time);
+
     bool valid() const { return model_.valid; }
     bool hasSkeleton() const { return model_.hasSkin && model_.jointCount > 0; }
     const glm::mat4& transform() const { return transform_; }
@@ -38,6 +41,7 @@ private:
     ParallelTransportSpline path_;
 
     int lureIndex_ = -1;
+    float pathStartTime_ = 0.0f;
     std::vector<glm::mat4> joints_;
     glm::mat4 transform_{1.0f};
     glm::vec3 lurePosition_{0.0f};

@@ -38,8 +38,12 @@ void Anglerfish::setupCircularPath(const glm::vec3& center, float radius, int po
     path_.rebuild(glm::vec3(0.0f, 1.0f, 0.0f));
 }
 
+void Anglerfish::resetPath(float time) {
+    pathStartTime_ = time;
+}
+
 void Anglerfish::update(float time) {
-    const CurveFrame frame = path_.frameAt(time * pathSpeed);
+    const CurveFrame frame = path_.frameAt((time - pathStartTime_) * pathSpeed);
     transform_ = ModelLoader::swimTransform(frame.position, frame.tangent);
 
     if (!model_.valid) return;

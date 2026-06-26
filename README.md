@@ -68,6 +68,8 @@ cmake --build build --config Release
 | Left Shift | Move down |
 | Mouse | Look around (quaternion camera) |
 | **F** | Toggle bathyscaphe headlights on/off |
+| **H** | Send all fish back to the start of their swim path |
+| **T** | Toggle shadow mapping on/off |
 | **[** | Decrease underwater fog density |
 | **]** | Increase underwater fog density |
 | **G** | Cycle flow distortion: off → normal (0.003) → strong (0.006) |

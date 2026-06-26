@@ -11,7 +11,6 @@ uniform sampler2D metallicMap;
 uniform sampler2D roughnessMap;
 uniform sampler2D shadowMapFish;
 uniform sampler2D shadowMapCam;
-uniform sampler2D flowMap;
 
 uniform vec3 camPos;
 uniform vec3 lightPositions[4];
@@ -29,8 +28,6 @@ uniform float materialRoughness;
 uniform vec3 materialAlbedoTint;
 uniform vec3 materialEmissive;
 uniform float underwaterFogDensity;
-uniform float time;
-uniform bool useSandFlow;
 uniform bool shadowsEnabled;
 uniform bool u_enableTopMoss;
 
@@ -79,36 +76,13 @@ float ShadowCalculation(sampler2D mapTex, vec4 fragPosLightSpace) {
 }
 
 void main() {
-    vec2 sandUV0 = TexCoords;
-    vec2 sandUV1 = TexCoords;
-    float sandBlend = 0.0;
-    if (useSandFlow) {
-        vec2 flow = texture(flowMap, TexCoords).rg * 2.0 - 1.0;
-        const float flowSpeed = 0.08;
-        float phase0 = fract(time * flowSpeed);
-        float phase1 = fract(time * flowSpeed + 0.5);
-        sandBlend = abs(phase0 - 0.5) * 2.0;
-        sandUV0 = TexCoords + flow * phase0;
-        sandUV1 = TexCoords + flow * phase1;
-    }
-
-    vec3 albedo;
-    if (useSandFlow) {
-        albedo = mix(texture(albedoMap, sandUV0).rgb, texture(albedoMap, sandUV1).rgb, sandBlend) * materialAlbedoTint;
-    } else {
-        albedo = texture(albedoMap, TexCoords).rgb * materialAlbedoTint;
-    }
+    vec3 albedo = texture(albedoMap, TexCoords).rgb * materialAlbedoTint;
     float metallic = texture(metallicMap, TexCoords).r * materialMetallic;
     float roughness = texture(roughnessMap, TexCoords).r * materialRoughness;
 
     vec3 N = normalize(TBN[2]);
     if (useNormalMap) {
-        vec3 tangentNormal;
-        if (useSandFlow) {
-            tangentNormal = mix(texture(normalMap, sandUV0).rgb, texture(normalMap, sandUV1).rgb, sandBlend) * 2.0 - 1.0;
-        } else {
-            tangentNormal = texture(normalMap, TexCoords).rgb * 2.0 - 1.0;
-        }
+        vec3 tangentNormal = texture(normalMap, TexCoords).rgb * 2.0 - 1.0;
         N = normalize(TBN * tangentNormal);
     }
 
